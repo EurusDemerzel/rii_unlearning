@@ -1,0 +1,40 @@
+# =============================================================================
+# Machine Unlearning Pipeline — Configuration
+# =============================================================================
+
+# ---- Model architectures ------------------------------------------------
+model:
+  mnist:
+    type: mlp
+    input_dim: 784
+    hidden_dim: 128
+    num_classes: 10
+  cifar10:
+    type: cnn
+    input_channels: 3
+    num_classes: 10
+
+# ---- Training ------------------------------------------------------------
+training:
+  batch_size: 64
+  epochs: 10
+  learning_rate: 0.001
+  seed: 42
+
+# ---- SISA unlearning -----------------------------------------------------
+sisa:
+  num_shards: 5
+  slices_per_shard: 10
+  epochs_per_slice: 1           # total = slices_per_shard × epochs_per_slice
+
+# ---- Fine-tune (gradient-ascent) unlearning ------------------------------
+finetune:
+  epochs: 3
+  learning_rate: 0.00001        # 100× smaller than training lr
+  ascent_on_forget: true         # gradient-ascent on forget set
+  train_on_retain: true          # simultaneously train normally on retain set
+
+# ---- Output --------------------------------------------------------------
+output:
+  results_dir: results
+  save_models: true

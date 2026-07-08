@@ -1,0 +1,10 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../Desktop/cifar-10-batches-py"
+		}
+	]
+}
