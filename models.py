@@ -1,5 +1,5 @@
 """
-Model definitions for the machine unlearning pipeline.
+rii_unlearning — Model definitions.
 
 Supported architectures:
   - SimpleMLP:  2-layer MLP for MNIST  (784 → 128 → 10)

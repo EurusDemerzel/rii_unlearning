@@ -1,5 +1,5 @@
 """
-Information-theoretic metrics for evaluating machine unlearning quality.
+rii_unlearning — Information-theoretic metrics for evaluating machine unlearning quality.
 
 Metrics (based on the rank-one channel model):
   1. Symmetric KL divergence between P(Y|forget) and P(Y|retain)

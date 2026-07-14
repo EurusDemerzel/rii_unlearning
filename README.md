@@ -1,4 +1,4 @@
-# One-Rank: A Spectral Criterion for Machine Unlearning
+# rii_unlearning: A Spectral Criterion for Machine Unlearning
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -8,6 +8,8 @@ Official implementation of the **Residual Information Index (RII)** — a spectr
 
 **Paper**: *"A Spectral Framework for Output-Space Irreversibility in Machine Unlearning"*  
 **Submitted to**: IEEE Transactions on Information Forensics and Security (TIFS)
+
+**Code**: [GitHub](https://github.com/EurusDemerzel/rii_unlearning) | [Gitee](https://gitee.com/peregrine_eurus/rii_unlearning)
 
 ---
 
@@ -43,8 +45,8 @@ For class-level forgetting, we introduce the **Multi-Held-Out Projection Residua
 
 ```bash
 # Clone the repository
-git clone https://github.com/<your-username>/one-rank.git
-cd one-rank
+git clone https://github.com/EurusDemerzel/rii_unlearning.git
+cd rii_unlearning
 
 # Create virtual environment
 python -m venv venv
