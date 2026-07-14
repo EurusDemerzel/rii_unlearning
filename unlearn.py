@@ -162,8 +162,7 @@ def unlearn_sisa(model_class_fn, dataset_name, device,
 
     for s in range(S):
         if not shard_has_forget[s]:
-            unlearned_models.append(clone_model(all_checkpoints[s][-1], dataset_name, device, model_name,
-                                                 dataset_name, device))
+            unlearned_models.append(clone_model(all_checkpoints[s][-1], dataset_name, device, model_name))
             continue
 
         k = shard_first_affected[s]

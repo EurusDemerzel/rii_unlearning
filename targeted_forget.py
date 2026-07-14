@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Targeted forgetting: 遗忘CIFAR-10中整个cat类，观察RII随遗忘强度的变化"""
 import torch, torch.nn as nn, torch.optim as optim, numpy as np, csv, sys
-sys.path.insert(0, '/Users/peregrine/one_rank')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from models import get_model
 from pipeline import load_dataset
 
-device = torch.device("mps")
+device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 ds_name, model_name = "cifar10", "cnn"
 all_imgs, all_lbls, N, test_ldr, _ = load_dataset(ds_name)
 
@@ -147,7 +147,8 @@ for steps in [10, 20, 50]:
     print(f"  ascent{steps}+ft:  rho={rho:.2e}  mia={mia:.3f}  acc={acc:.1f}%")
 
 # Save
-with open("/Users/peregrine/one_rank/targeted_forgetting_results.csv", "w") as f:
+os.makedirs("results", exist_ok=True)
+with open("results/targeted_forgetting_results.csv", "w") as f:
     w = csv.writer(f)
     w.writerow(["experiment", "steps", "rho", "sigma_ratio", "mia", "test_acc"])
     w.writerows(results)

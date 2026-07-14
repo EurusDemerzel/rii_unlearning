@@ -77,7 +77,7 @@ class SmallCNN(nn.Module):
         self.bn3   = nn.BatchNorm2d(128)
 
         self.pool   = nn.MaxPool2d(2, 2)
-        self.relu   = nn.ReLU(inplace=True)
+        self.relu   = nn.ReLU()
         self.dropout = nn.Dropout(0.3)
 
         # After 3× pooling: 32 → 16 → 8 → 4  → 128 × 4 × 4 = 2048
@@ -91,7 +91,7 @@ class SmallCNN(nn.Module):
         x = self.pool(x)                                 # → 8×8
         x = self.relu(self.bn3(self.conv3(x)))          # 8×8
         x = self.pool(x)                                 # → 4×4
-        x = x.view(x.size(0), -1)                       # flatten
+        x = torch.flatten(x, 1)                          # flatten
         x = self.relu(self.fc1(x))
         x = self.dropout(x)
         x = self.fc2(x)
