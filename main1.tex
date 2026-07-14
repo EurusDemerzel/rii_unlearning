@@ -304,7 +304,7 @@ where $N_{\min} = \min(N_f, N_{h_1},\dots,N_{h_K})$ and $\rho_H^*$ is the popula
 \end{proposition}
 
 \begin{proof}[Proof Sketch]
-The estimate $\hat{\rho}_H$ depends on $K+1$ mean vectors ($\boldsymbol{\mu}_f$ and $\boldsymbol{\mu}_{h_1},\dots,\boldsymbol{\mu}_{h_K}$), each estimated from $N_f$ or $N_{h_k}$ sub-Gaussian samples. By Hoeffding's inequality and a union bound over $(K+1)C$ entries, $\max(\|\hat{\boldsymbol{\mu}}_f - \boldsymbol{\mu}_f^*\|_2, \max_k \|\hat{\boldsymbol{\mu}}_{h_k} - \boldsymbol{\mu}_{h_k}^*\|_2) \le 4\nu\sqrt{C\log((K+1)C/\delta)/N_{\min}}$ with probability $\ge 1-\delta$. The MHPR is a locally Lipschitz function of these $K+1$ vectors with constant $O(1/\|\boldsymbol{\mu}_f^*\|_2^2)$, giving the claimed bound via the union bound and triangle inequality.
+The estimate $\hat{\rho}_H$ depends on $K+1$ mean vectors ($\boldsymbol{\mu}_f$ and $\boldsymbol{\mu}_{h_1},\dots,\boldsymbol{\mu}_{h_K}$), each estimated from $N_f$ or $N_{h_k}$ sub-Gaussian samples. By Hoeffding's inequality and a union bound over $(K+1)C$ entries, $\max(\|\hat{\boldsymbol{\mu}}_f - \boldsymbol{\mu}_f^*\|_2, \max_k \|\hat{\boldsymbol{\mu}}_{h_k} - \boldsymbol{\mu}_{h_k}^*\|_2) \le 4\nu\sqrt{C\log((K+1)C/\delta)/N_{\min}}$ with probability $\ge 1-\delta$. The MHPR is a locally Lipschitz function of these $K+1$ vectors. A direct computation gives $\|\nabla_{\boldsymbol{\mu}_f}\phi\|_2 \le 2/\|\boldsymbol{\mu}_f\|_2$ and $\|\nabla_{\boldsymbol{\mu}_{h_k}}\phi\|_2 \le 2/\|\boldsymbol{\mu}_f\|_2$. With $\|\boldsymbol{\mu}_f\|_2 \ge \|\boldsymbol{\mu}_f^*\|_2/2$ for sufficiently large $N_f$, the combined Lipschitz constant is $L = 8/\|\boldsymbol{\mu}_f^*\|_2^2$. Applying the delta method yields the claimed bound. See Appendix~\ref{app:mhpr_proofs} for details.
 \end{proof}
 
 \paragraph{Choice of $K$ and the bias--variance tradeoff.}
@@ -395,6 +395,8 @@ where $J(Z) = \int (f_Z'(z))^2/f_Z(z)\,dz$ is the Fisher information of $Z$. For
 Expand $f_R(r) = \int f_X(x)f_Z(r-\alpha x)dx$ around $\alpha=0$: $f_R(r) = f_Z(r) + \frac{\alpha^2}{2}\mathrm{Var}(X)f_Z''(r) + o(\alpha^2)$. Using the perturbation expansion of differential entropy $H(f+\delta f) = H(f) + \frac{1}{2}\int (\delta f)^2/f + o(\|\delta f\|^2)$ and noting that the first-order term vanishes, we obtain $H(R) = H(Z) + \frac{\alpha^2}{2}\mathrm{Var}(X)J(Z) + o(\alpha^2)$. Since $H(R|X) = H(Z)$, the result follows.
 \end{proof}
 
+\textbf{Connection to Theorem~\ref{thm:unified}.} When applying Lemma~\ref{lem:fisher} in the proof of Theorem~\ref{thm:unified}, we condition on $Y$ so that $Z = N$ (the only remaining randomness is the observation noise). Thus $J(Z) = J(N) = 1/\sigma^2$.
+
 %=============================================================================
 \section{Main Theoretical Results}
 \label{sec:theory}
@@ -412,7 +414,9 @@ That is, $\rho=0$ is necessary and sufficient for the model output $Y$ to be con
 \end{theorem}
 
 \begin{proof}
-$\rho = 0 \Rightarrow \sigma_2 = 0 \Rightarrow \mathrm{rank}(\mathbf{M}) = 1$. Since both rows are probability vectors, $\boldsymbol{\mu}_f = \boldsymbol{\mu}_r$. For the softmax output (a categorical exponential family), the mean parameter $\boldsymbol{\mu}$ is the sufficient statistic. Equality of sufficient statistics implies equality of the full conditional distributions: $P(Y\mid x\in D_f, \theta') = P(Y\mid x\in D_r, \theta')$. Hence $Y \perp X \mid \theta'$, i.e., $I(X; Y \mid \theta') = 0$. The converse follows because $\boldsymbol{\mu}_f \neq \boldsymbol{\mu}_r$ creates a binary channel with positive capacity.
+$\rho = 0 \Rightarrow \sigma_2 = 0 \Rightarrow \mathrm{rank}(\mathbf{M}) = 1$. Since both rows are probability vectors summing to one, a rank-one $2\times C$ matrix must have proportional rows: $\boldsymbol{\mu}_f = \lambda \boldsymbol{\mu}_r$ for some $\lambda > 0$. The normalization $\sum_c (\boldsymbol{\mu}_f)_c = \sum_c (\boldsymbol{\mu}_r)_c = 1$ forces $\lambda = 1$, hence $\boldsymbol{\mu}_f = \boldsymbol{\mu}_r$.
+
+For the softmax output (a categorical exponential family), the mean parameter $\boldsymbol{\mu} = \mathbb{E}[Y\mid x] = \mathbf{p}(x;\theta')$ uniquely determines the conditional distribution via the bijective softmax link. Hence $\boldsymbol{\mu}_f = \boldsymbol{\mu}_r$ implies equality of the full conditional distributions: $P(Y\mid x\in D_f, \theta') = P(Y\mid x\in D_r, \theta')$. Therefore $Y \perp X \mid \theta'$, i.e., $I(X; Y \mid \theta') = 0$. The converse follows because $\boldsymbol{\mu}_f \neq \boldsymbol{\mu}_r$ creates a binary channel with positive capacity.
 \end{proof}
 
 \begin{remark}[Why Output-Space Only?]
@@ -438,7 +442,7 @@ samples from each of $D_f$ and $D_r$.
 \end{proposition}
 
 \begin{proof}[Proof Sketch]
-Each entry of $\hat{\mathbf{M}}$ is a sample mean of $N_f$ or $N_r$ sub-Gaussian variables. By Hoeffding, $\|\hat{\mathbf{M}} - \mathbf{M}\|_F \le O(\sqrt{C/\min(N_f,N_r)})$ with high probability. By Weyl's perturbation theorem, $|\hat{\sigma}_i - \sigma_i| \le \|\hat{\mathbf{M}} - \mathbf{M}\|_2 \le \|\hat{\mathbf{M}} - \mathbf{M}\|_F$. The RII is a smooth function of $(\sigma_1,\sigma_2)$ with gradient bounded by $O(1/\sigma_1^2)$, yielding the claimed rate via the delta method.
+Each entry of $\hat{\mathbf{M}}$ is a sample mean of $N_f$ or $N_r$ sub-Gaussian variables. By Hoeffding's inequality, $\mathbb{P}(|\hat{M}_{ij} - M_{ij}| \ge t) \le 2\exp(-N_{\min} t^2 / 2\nu^2)$ for each entry. A union bound over $2C$ entries gives $\|\hat{\mathbf{M}} - \mathbf{M}\|_F \le 2\nu\sqrt{2C\log(4C/\delta)/N_{\min}}$ with probability $\ge 1-\delta$. By Weyl's perturbation theorem, $|\hat{\sigma}_i - \sigma_i| \le \|\hat{\mathbf{M}} - \mathbf{M}\|_2 \le \|\hat{\mathbf{M}} - \mathbf{M}\|_F$. The RII $\rho = f(\sigma_1,\sigma_2) = 1 - \sigma_1^2/(\sigma_1^2+\sigma_2^2)$ has gradient $\|\nabla f\|_2 \approx 2\sigma_2/\sigma_1^2$ for $\rho \ll 1$, giving a Lipschitz constant $O(1/\sigma_1^2)$. The delta method then yields the claimed rate. See Appendix~\ref{sec:appendix} for the explicit constant derivation.
 \end{proof}
 
 This bound explains the empirical observation that $\hat{\rho}$ decreases with forget ratio: at 1\% forget ($N_f \approx 600$ for MNIST), estimation noise inflates $\hat{\rho}$; at 10\%--20\% ($N_f \ge 6000$), the estimate stabilizes. The $O(1/\sqrt{N_f})$ rate matches our experimental data precisely.
@@ -459,7 +463,7 @@ In particular, $\rho = O(\eta^2)$ for small step sizes.
 \end{theorem}
 
 \begin{proof}[Proof Sketch]
-The gradient step perturbs the output logits by $\Delta f(x) \approx \eta \langle \nabla_\theta f_{\theta_0}(x), \nabla_\theta \mathcal{L}(\theta_0, D_f)\rangle$. The change in $\boldsymbol{\mu}_f$ relative to $\boldsymbol{\mu}_r$ is $\Delta\boldsymbol{\mu} = \frac{1}{N_f}\sum_{x\in D_f} \mathbf{J}_{\mathrm{softmax}}(f(x)) \cdot \Delta f(x) + o(\eta)$, where $\mathbf{J}_{\mathrm{softmax}}$ is the softmax Jacobian. Under the assumption that per-sample gradients on $D_f$ are approximately uncorrelated with those on $D_r$, the squared $\ell_2$ deviation satisfies $\|\Delta\boldsymbol{\mu}\|_2^2 \le O(\eta^2) \cdot \mathrm{Tr}(\mathrm{Cov}(\nabla f))$. Since $\sigma_2 = \|\boldsymbol{\mu}_f - \boldsymbol{\mu}_r\|_2 / \sqrt{2}$ and $\rho \approx \sigma_2^2/\sigma_1^2$ for small $\rho$, the result follows.
+The gradient step perturbs the output logits by $\Delta f(x) \approx \eta \langle \nabla_\theta f_{\theta_0}(x), \nabla_\theta \mathcal{L}(\theta_0, D_f)\rangle$. The change in $\boldsymbol{\mu}_f$ relative to $\boldsymbol{\mu}_r$ is $\Delta\boldsymbol{\mu} = \frac{1}{N_f}\sum_{x\in D_f} \mathbf{J}_{\mathrm{softmax}}(f(x)) \cdot \Delta f(x) + o(\eta)$, where $\mathbf{J}_{\mathrm{softmax}}$ is the softmax Jacobian. Under the assumption that per-sample gradients on $D_f$ are approximately uncorrelated with those on $D_r$ (which holds for sample-level forgetting by random sampling, but may require modification for class-level forgetting), the squared $\ell_2$ deviation satisfies $\|\Delta\boldsymbol{\mu}\|_2^2 \le O(\eta^2) \cdot \mathrm{Tr}(\mathrm{Cov}(\nabla f))$. Since $\sigma_2 = \|\boldsymbol{\mu}_f - \boldsymbol{\mu}_r\|_2 / \sqrt{2}$ and $\rho \approx \sigma_2^2/\sigma_1^2$ for small $\rho$, the result follows.
 \end{proof}
 
 Theorem~\ref{thm:finetune} has an important practical implication: \textbf{the RII after fine-tuning grows at most quadratically in the learning rate}, enabling practitioners to choose $\eta$ to balance unlearning speed against residual leakage. Our experiments confirm this: with $\eta=10^{-5}$, $\rho$ remains below $10^{-3}$.
@@ -473,7 +477,7 @@ Let $X \in \{0,1\}$ be the forget/retain indicator and $Y \in \{1,\dots,C\}$ the
 \boxed{I(X; Y \mid \theta') \le \frac{2\sigma_1^2}{\delta\ln 2}\cdot\frac{\rho}{1-\rho} + o(\rho),}
 \label{eq:mi_bound}
 \end{equation}
-where $\delta = \min_y P_r(y) > 0$. For well-calibrated classifiers ($\delta \approx 1/C$): $I \le \frac{2C\sigma_1^2}{\ln 2}\cdot\frac{\rho}{1-\rho}$. For $\rho \ll 1$: $I \le O(\rho)$.
+where $\delta = \min_y P_r(y) > 0$. For well-calibrated classifiers ($\delta \approx 1/C$): $I \le \frac{2C\sigma_1^2}{\ln 2}\cdot\frac{\rho}{1-\rho}$. For $\rho \ll 1$: $I \le O(\rho)$. The $o(\rho)$ term vanishes as $\rho \to 0$; in particular, $\rho=0$ implies $I=0$, consistent with Theorem~\ref{thm:perfect}.
 \end{theorem}
 
 \begin{proof}
@@ -515,7 +519,7 @@ $I_{\mathrm{cov}} = C_2\sum_{k\ge 2}\sigma_k^2 = C_2\eta^2$ (cover leakage).
 \end{theorem}
 
 \begin{proof}
-By the chain rule and data processing inequality, $I(X;R) \le I(X;Y) + I(X;R\mid Y)$. For the cover term, the Hilbert--Schmidt decomposition yields $I(X;Y) \le C_2\sum_{k\ge 2}\sigma_k^2 = C_2\eta^2$, since mutual information between $X$ and $Y$ is bounded by the squared Hilbert--Schmidt norm of the deviation from rank one~\cite{bloch2021overview}. For the direct term, Lemma~\ref{lem:fisher} gives $I(X;R\mid Y) = \frac{\alpha^2}{2\sigma^2}\mathrm{Var}(X) + o(\alpha^2)$, noting that conditioned on $Y$, the only remaining dependence is through $\alpha X$. Summing both contributions yields the decomposition.
+By the chain rule and data processing inequality, $I(X;R) \le I(X;Y) + I(X;R\mid Y)$. For the cover term, the Hilbert--Schmidt decomposition yields $I(X;Y) \le C_2\sum_{k\ge 2}\sigma_k^2 = C_2\eta^2$, where $C_2$ is a universal constant depending only on the output space (for discrete $Y$ with $C$ classes, $C_2 = \log C$); this follows from bounding mutual information by the squared Hilbert--Schmidt norm of the deviation from rank one~\cite{bloch2021overview}. For the direct term, Lemma~\ref{lem:fisher} gives $I(X;R\mid Y) = \frac{\alpha^2}{2\sigma^2}\mathrm{Var}(X) + o(\alpha^2)$, noting that conditioned on $Y$, the only remaining randomness is the Gaussian noise $N$, so $J(Z)=J(N)=1/\sigma^2$. Summing both contributions yields the decomposition.
 \end{proof}
 
 \begin{remark}[Orthogonal Leakage Axes]
