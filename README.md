@@ -150,9 +150,9 @@ For Tiny ImageNet, download from [tiny-imagenet.herokuapp.com](https://tiny-imag
 If you use this code in your research, please cite our paper:
 
 ```bibtex
-@article{lu2026spectral,
+@article{zhang2026spectral,
   title={A Spectral Framework for Output-Space Irreversibility in Machine Unlearning},
-  author={Lu, Chenggang},
+  author={Zhang, Yan and Lu, Chenggang},
   journal={IEEE Transactions on Information Forensics and Security},
   year={2026},
   note={Submitted}
@@ -165,5 +165,5 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ## Contact
 
-Chenggang Lu — ZJUT, College of Mathematical Sciences  
+Yan Zhang — ZJUT, College of Mathematical Sciences  
 For questions or collaborations, please open an issue on GitHub.
