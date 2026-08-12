@@ -1,0 +1,1045 @@
+\documentclass[smallextended]{svjour3}       % Springer journal template (Applied Intelligence)
+\smartqed                                    % flush right qed marks at end of proofs
+%
+\RequirePackage{fix-cm}
+%
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{multirow}
+\usepackage{booktabs}
+%
+% Theorem-like environments are provided by svjour3.cls
+% (Theorem, Lemma, Proposition, Corollary, Definition, Remark, Proof).
+%
+\newcommand{\coloneqq}{\triangleq}
+%
+\journalname{Applied Intelligence}
+
+\begin{document}
+
+\title{RII: A Spectral Certificate for Verifying Class-Level Machine Unlearning%
+\thanks{The implementation is available at \protect\url{https://github.com/EurusDemerzel/rii_unlearning}.}%
+}
+\titlerunning{RII: A Spectral Certificate for Unlearning}
+
+\author{Yan Zhang \and Chenggang Lu%
+\thanks{Corresponding author: Chenggang Lu (\email{luchenggang@zjut.edu.cn}).}%
+}
+\authorrunning{Zhang and Lu}
+
+\institute{Yan Zhang \at
+              College of Mathematical Sciences, Zhejiang University of Technology, Hangzhou, China\\
+              \email{302023316001@zjut.edu.cn}
+           \and
+           Chenggang Lu \at
+              College of Mathematical Sciences, Zhejiang University of Technology, Hangzhou, China\\
+              \email{luchenggang@zjut.edu.cn}
+}
+
+\date{Received: date / Accepted: date}
+
+\maketitle
+
+\begin{abstract}
+Machine unlearning aims to remove the influence of specific training data from a trained model without full retraining; verifying that removal has succeeded is a central open problem. Membership inference attacks (MIA) conflate train/test shift with forget-set leakage, and differential-privacy bounds require invasive training, so neither certifies output-level indistinguishability. We introduce a spectral certificate built on a $2\times C$ \emph{empirical output channel matrix} whose rows are the averaged softmax predictions on the forget and retain sets, and define the \textbf{Residual Irreversibility Index (RII)} $\rho=1-\sigma_1^2/(\sigma_1^2+\sigma_2^2)$, which vanishes exactly when the two channel output distributions are indistinguishable. For class-level forgetting, where standard RII suffers from known/unknown class asymmetry, we introduce the \textbf{Multi-Held-Out Projection Residual (MHPR)} $\rho_H$, projecting the forgotten class mean onto the subspace of multiple held-out unseen classes, with finite-sample guarantees and temperature scaling for low-accuracy regimes. We prove that $\rho=0$ is equivalent to output-channel independence and derive bounds on fine-tuning leakage, mutual information, and a unified two-axis decomposition of output leakage. On a unified benchmark across CIFAR-10, Fashion-MNIST, and CIFAR-100 (20 classes), and in a pilot study on text classification and a small language model, RII ranks seven unlearning methods consistently with forgetting strength and exposes a hidden failure of gradient ascent---its output signature strengthens even as accuracy and MIA report improvement, and increasingly so at larger class counts---together with a fine-tune rebound that accuracy-based metrics miss; MHPR resolves the class-level asymmetry where the held-out reference is representative, and its collapse on low-accuracy Fashion-MNIST motivates temperature scaling. Representation-level probes confirm that output-level erasure can coexist with feature-level signatures, motivating a two-layer audit.
+\keywords{Rank-one channels \and machine unlearning \and singular value decomposition \and residual irreversibility index \and multi-held-out projection \and output-space irreversibility}
+\end{abstract}
+
+%=============================================================================
+\section{Introduction}
+\label{sec:intro}
+%=============================================================================
+
+The right to erasure (GDPR Article~17) requires that machine learning models eliminate the influence of specific training data upon request~\cite{bourtoule2021machine,nguyen2025survey}. A central challenge is \emph{how to verify that unlearning has succeeded}. Existing methods rely on membership inference attacks (MIA) that conflate train/test distributional shift with forget/retain leakage, or on differential privacy bounds that require invasive training.
+
+Specifically, we address the research question: \emph{can a lightweight, black-box certificate verify output-level indistinguishability between the forget and retain sets in the class-level regime, where existing metrics are least reliable?} Our answer is a spectral condition on the model's output channel.
+
+We propose a lightweight, black-box certificate based on a \textbf{spectral condition}: output-space irreversibility reduces to the rank of a $2\times C$ output channel matrix. By \textbf{output distributional irreversibility}, we mean that the forget-set membership indicator $X$ and the model's categorical output $Y$ are conditionally independent given the parameters $\theta'$, i.e., $I(X;Y\mid\theta')=0$. When this holds, the model's output distributions on $D_f$ and $D_r$ are statistically indistinguishable, yielding a rank-one output channel matrix and $\rho=0$.
+
+\textbf{Scope.} Our framework measures irreversibility strictly in the \emph{output space}---the observable predictions---matching black-box GDPR compliance auditing. Parameter-level white-box security is not asserted. We focus on \textbf{class-level forgetting}, the most stringent and practically relevant regime, where $D_f$ comprises an entire semantic class; MHPR (Sec.~\ref{sec:mhpr}) specifically addresses the known/unknown class asymmetry that arises there.
+
+\paragraph{Key insight.}
+The $2\times C$ \textbf{empirical output channel matrix} $\mathbf{M}(\theta')$ has rows $\boldsymbol{\mu}_f$ and $\boldsymbol{\mu}_r$ (mean softmax vectors on $D_f$ and $D_r$). Its singular values $\sigma_1 \ge \sigma_2$ encode residual dependence: $\sigma_2 = 0 \iff \mathrm{rank}(\mathbf{M}) = 1 \iff$ perfect removal.
+
+\textbf{Contributions:}
+\begin{enumerate}
+\item \textbf{We propose} an output-spectral framework (Sec.~\ref{sec:channel}): a $2\times C$ channel matrix whose rank-one condition yields the tuning-free Residual Irreversibility Index (RII).
+\item \textbf{We prove} (Theorem~\ref{thm:perfect}) that $\rho=0$ iff $I(X;Y\mid\theta')=0$ via a channel-level argument that requires no exponential-family or calibration assumptions.
+\item \textbf{We design} MHPR (Sec.~\ref{sec:mhpr}) for class-level forgetting: a multi-held-out projection that resolves the known/unknown class asymmetry, with temperature scaling and finite-sample guarantees.
+\item \textbf{We establish} (Sec.~\ref{sec:theory}) confidence bounds, an $O(\lambda^2)$ fine-tuning leakage bound, a spectral MI bound, and a unified decomposition of output leakage into two orthogonal axes.
+\item \textbf{We evaluate} RII and MHPR on a unified seven-method benchmark (Sec.~\ref{sec:experiments}), exposing hidden failures---gradient-ascent signature strengthening and fine-tune rebound---that accuracy and MIA miss. We also give an $O(CN)$ audit protocol and a per-sample extension (PSSD, Appendix~\ref{app:pssd}).
+\end{enumerate}
+
+%=============================================================================
+\section{Problem Setup and Spectral Framework}
+\label{sec:channel}
+%=============================================================================
+
+\subsection{Problem Setup}
+
+Let $D = \{(x_i, y_i)\}_{i=1}^N$ be a training set, $\theta_0 = \mathcal{A}(D)$ trained parameters, $D_f \subset D$ the forget set, $D_r = D \setminus D_f$ the retain set, with $N_f = |D_f|$, $N_r = |D_r|$. An unlearning algorithm $\mathcal{U}$ produces $\theta' = \mathcal{U}(\theta_0, D_f, D_r)$. We quantify the residual dependence $I(D_f; \theta' \mid \theta_0)$ via the output distribution.
+
+We focus on \textbf{class-level unlearning}, where $D_f$ comprises all examples of entire semantic classes. This regime exposes spectral structure that sample-level forgetting can obscure.
+
+\subsection{The Empirical Output Channel Matrix}
+
+Let $f_{\theta'}$ be the logit function and $\mathbf{p}(x;\theta') = \mathrm{Softmax}(f_{\theta'}(x)) \in \Delta^{C-1}$.
+
+\begin{definition}[Empirical Output Channel Matrix]
+\label{def:M}
+\begin{equation}
+\mathbf{M}(\theta') =
+\begin{bmatrix}
+\boldsymbol{\mu}_f^\top \\ \boldsymbol{\mu}_r^\top
+\end{bmatrix}
+\in \mathbb{R}^{2\times C},
+\qquad
+\begin{aligned}
+\boldsymbol{\mu}_f &= \frac{1}{N_f}\sum_{x\in D_f} \mathbf{p}(x;\theta'),\\
+\boldsymbol{\mu}_r &= \frac{1}{N_r}\sum_{x\in D_r} \mathbf{p}(x;\theta').
+\end{aligned}
+\end{equation}
+\end{definition}
+
+For the channel matrix of Definition~\ref{def:M}, the SVD is $\mathbf{M} = \sigma_1 \mathbf{u}_1 \mathbf{v}_1^\top + \sigma_2 \mathbf{u}_2 \mathbf{v}_2^\top$, where $\sigma_1 \ge \sigma_2 \ge 0$. The squared singular values are eigenvalues of the $2\times 2$ Gram matrix $\mathbf{M}\mathbf{M}^\top$; when $\|\boldsymbol{\mu}_f\| = \|\boldsymbol{\mu}_r\|$, we have $\|\boldsymbol{\mu}_f - \boldsymbol{\mu}_r\|_2 = \sqrt{2}\,\sigma_2$.
+
+\subsection{The Residual Irreversibility Index}
+
+\begin{definition}[RII]
+\label{def:rii}
+\begin{equation}
+\rho(\theta') \coloneqq 1 - \frac{\sigma_1^2}{\sigma_1^2 + \sigma_2^2}
+= \frac{\sigma_2^2}{\sigma_1^2 + \sigma_2^2}
+\;\in\; [0,\,0.5].
+\label{eq:rho}
+\end{equation}
+\end{definition}
+
+Properties: (i) $\rho = 0 \iff \sigma_2 = 0 \iff \boldsymbol{\mu}_f = \boldsymbol{\mu}_r$ (perfect unlearning); (ii) $\rho = 0.5$ when $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$ and $\boldsymbol{\mu}_f \perp \boldsymbol{\mu}_r$; (iii) scale-invariant; (iv) $\rho \approx \sigma_2^2/\sigma_1^2$ when $\rho \ll 1$.
+
+\paragraph{What $\rho$ is---and is not.}
+Definition~\ref{def:rii} (Eq.~\eqref{eq:rho}) defines $\rho$ as a spectral residual energy---the normalized second singular value of the output channel---not a mutual information value. Its information-theoretic meaning is established by Theorem~\ref{thm:mi_bound}: $I(X;Y\mid\theta')\le O(\rho)$ for $\rho\ll1$, so $\rho$ vanishes exactly when the mutual information vanishes and upper-bounds it at small leakage.
+
+\paragraph{Statistical justification.}
+The rows $\boldsymbol{\mu}_f, \boldsymbol{\mu}_r$ are empirical Monte Carlo averages: $\hat{\boldsymbol{\mu}}_f\to\boldsymbol{\mu}_f^*$ as $N_f\to\infty$ with $O_p(1/\sqrt{N_f})$ convergence, so the rank-one condition is a statement about \emph{group-level} statistical indistinguishability (finite-sample guarantees in Proposition~\ref{prop:confidence}).
+
+%=============================================================================
+\section{Class-Level Forgetting and MHPR}
+\label{sec:class_baselines}
+%=============================================================================
+
+In class-level forgetting, the forget and retain rows average over fundamentally different distributions: $\boldsymbol{\mu}_f$ comes from a class the model never saw during training. Even under perfect unlearning, the rows can therefore differ, inflating standard RII.
+
+\subsection{The Leave-One-Class-Out (LOCO) Failure}
+
+Replacing $\boldsymbol{\mu}_r$ with a single held-out unseen class mean (LOCO) fails because different unseen classes produce systematically different prediction profiles: on MNIST (train on $\{1,2,3,4,6,7,8,9\}$, forget class~5, hold out class~0), $\rho_{\mathrm{LOCO}}{\approx}0.32$ exceeds standard RII ${\approx}0.14$, opposite to the intended direction.
+
+\subsection{Multi-Held-Out Projection Residual}
+\label{sec:mhpr}
+
+MHPR uses $K \ge 2$ held-out unseen classes and projects the forgotten class mean onto their span, eliminating single-class bias.
+
+\begin{definition}[MHPR]
+\label{def:mhpr}
+Let $\mathcal{H} = \{c_{h1},\dots,c_{hK}\}$ be $K$ held-out classes with mean vectors $\boldsymbol{\mu}_{h_k}$, and $\mathbf{H} = [\boldsymbol{\mu}_{h_1},\dots,\boldsymbol{\mu}_{h_K}]^\top$. The MHPR is:
+\begin{equation}
+\rho_H(\theta') \coloneqq \frac{\|\boldsymbol{\mu}_f - \mathbf{H}^+ \mathbf{H} \boldsymbol{\mu}_f\|_2^2}{\|\boldsymbol{\mu}_f\|_2^2} \in [0,1].
+\end{equation}
+\end{definition}
+
+\paragraph{Properties.}
+For the MHPR of Definition~\ref{def:mhpr}: (1) Monotonic: $\rho_H(K_2) \le \rho_H(K_1)$ for $K_2 \ge K_1$ (Prop.~\ref{prop:mhpr_monotone}). (2) Dominates LOCO: $\rho_H(K) \le \rho_H(1)$ for $K\ge 2$. (3) Bias--variance: under $\mathcal{H}_0$ (ideal forgetting), $\mathbb{E}[\rho_H] = O(CK/N_{\min})$ (Prop.~\ref{prop:mhpr_bias}); for $K=O(1)$ this is $O(C/N_{\min})$. (4) Finite-sample bound: $|\hat{\rho}_H - \rho_H^*|$ decays as $O(1/\sqrt{N_{\min}})$ with explicit constants (Prop.~\ref{prop:mhpr_confidence}). Proofs are in the appendix.
+
+\paragraph{Temperature scaling.}
+When softmax outputs are overly concentrated (accuracy $\lesssim 90\%$), the held-out class mean vectors become nearly collinear, collapsing the subspace $\mathcal{S}_K$ to a one-dimensional manifold---the root cause of MHPR failure on Fashion-MNIST ($88.7\%$ accuracy, $\rho_H\approx1$ for all $K$).
+
+A simple remedy is temperature scaling: $\mathbf{p}_T(x) = \mathrm{Softmax}(f_{\theta'}(x)/T)$. As $T\to\infty$, $\mathbf{p}_T \to \mathbf{1}/C$ (uniform), and the held-out subspace becomes well-conditioned. We select the smallest $T\in\{1,2,5,10,50,100\}$ with condition number $\kappa(\mathbf{H}(T)) < 10$. On Fashion-MNIST this selects $T=50$ ($\rho_H = 0.021$), on CIFAR-10 $T=5$ ($\rho_H = 0.025$). For high-accuracy models (MNIST, $\sim97.5\%$), $T=1$ suffices; the ranking-preservation property underlying this selection is proved in Proposition~\ref{prop:rank_preserve} (Appendix~\ref{app:temp}). A sweep over $T$ confirms that the criterion does not sacrifice signal: on both Fashion-MNIST and CIFAR-10, $\rho$ peaks near $T{=}5$ and falls by more than an order of magnitude at $T{=}10$, approaching zero as $T\to\infty$, so the smallest admissible temperature is also the most discriminative.
+
+\subsection{Bridging Logit-State and Softmax RII}
+\label{sec:logit_bridge}
+
+Quantizing logits into $M$ states ($k$-means on training logits) yields state distributions $\boldsymbol{\pi}_c\in\Delta^{M-1}$; the state-space RII $\rho_{\mathcal{S}}$ approximates the softmax RII (Theorem~\ref{thm:state_bridge}, Appendix~\ref{app:bridge}). In state space, MHPR admits a clean $\chi^2$ bound:
+
+\begin{theorem}[State-Space MHPR via $\chi^2$ Control]
+\label{thm:state_mhpr}
+Let $\boldsymbol{\pi}_f$ be the forget state distribution and $\bar{\boldsymbol{\pi}}_H = \frac{1}{K}\sum_k \boldsymbol{\pi}_{h_k}$. If $\chi^2(\boldsymbol{\pi}_f \| \bar{\boldsymbol{\pi}}_H) \le \eta^2$ and $\|\boldsymbol{\pi}_f\|_2^2 \ge \gamma > 0$, then
+\begin{equation}
+\rho_{H,\mathcal{S}} \le \frac{\eta^2}{\gamma}.
+\end{equation}
+Thus MHPR is a consistent proxy for output-level indistinguishability in state space. The bound uses $\chi^2(P\|Q) \coloneqq \sum_i (P_i-Q_i)^2/Q_i$ (the standard definition without the factor $1/2$).
+\end{theorem}
+
+Empirical validation (Appendix~\ref{app:chi2}) confirms $\rho_{H,\mathcal{S}} \le \chi^2/\|\boldsymbol{\pi}_f\|_2^2$ for all gradient-ascent steps. Additional state-space results (quantization error, spectrum bridge, MHPR deviation rate) are deferred to Appendix~\ref{app:bridge}.
+
+%=============================================================================
+\section{Theoretical Results}
+\label{sec:theory}
+%=============================================================================
+
+\begin{theorem}[Output Distributional Irreversibility]
+\label{thm:perfect}
+Let $X\in\{0,1\}$ be the forget-set membership indicator, and let $Y\in\{1,\dots,C\}$ denote the model's categorical output under $\theta'$: for input $x$, the channel emits $Y{=}c$ with probability $p_c(x;\theta')$, so that $P(Y{=}c\mid X{=}f)=(\boldsymbol{\mu}_f)_c$ and $P(Y{=}c\mid X{=}r)=(\boldsymbol{\mu}_r)_c$ by the law of total probability (Remark~\ref{rem:channel}). Then
+\begin{equation}
+\rho(\theta') = 0 \;\Longleftrightarrow\; \boldsymbol{\mu}_f = \boldsymbol{\mu}_r \;\Longleftrightarrow\; I(X; Y \mid \theta') = 0.
+\end{equation}
+Thus $\rho=0$ is necessary and sufficient for \emph{channel-level} (mean-output) distributional irreversibility: the categorical emission of the channel is independent of forget-set membership. Per-sample output distributions are not certified by $\rho$ (Remark~\ref{rem:channel}).
+\end{theorem}
+
+\begin{proof}
+$\rho=0 \Rightarrow \sigma_2=0 \Rightarrow \mathbf{M}$ rank-1. Both rows are probability vectors summing to one, so $\boldsymbol{\mu}_f = \lambda\boldsymbol{\mu}_r$ with $\lambda>0$; sum-to-one forces $\lambda=1$, hence $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$. By the law of total probability, $(\boldsymbol{\mu}_f)_c = \frac{1}{N_f}\sum_{x\in D_f}p_c(x;\theta') = \frac{1}{N_f}\sum_{x\in D_f}P(Y{=}c\mid x;\theta') = P(Y{=}c\mid X{=}f)$, and likewise $(\boldsymbol{\mu}_r)_c = P(Y{=}c\mid X{=}r)$; hence $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$ is exactly $P(Y\mid X{=}f)=P(Y\mid X{=}r)$, i.e., $Y\perp X\mid\theta'$ and $I(X;Y\mid\theta')=0$. The converse is immediate: $I(X;Y\mid\theta')=0$ forces $P(Y\mid X{=}f)=P(Y\mid X{=}r)$, i.e., $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$, so $\sigma_2=0$ and $\rho=0$.
+\end{proof}
+
+\begin{remark}[What the criterion certifies---and what it does not]
+\label{rem:channel}
+A natural concern is that $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$ is only a first-moment condition: equality of per-sample output \emph{means} does not imply equality of the \emph{distributions} of $\mathbf{p}(x)$ on $D_f$ and $D_r$. This concern applies to \emph{per-sample} indistinguishability, not to the \emph{channel} certificate. Because $Y$ is a $C$-valued categorical variable, its conditional law $P(Y\mid X{=}f)$ \emph{is} the $C$-dimensional vector $\boldsymbol{\mu}_f$ (by the law of total probability), so equality of means is exactly equality of the channel's conditional emission distribution---no exponential-family or sufficient-statistic assumption is required. The first-moment caveat would bind if $Y$ were the continuous softmax vector itself; that is the per-sample level, which $\rho$ does not certify and which the PSSD score (Definition~\ref{def:isd}, Appendix~\ref{app:pssd}) addresses: two sets can share an identical channel while individual samples retain anomalous logit states, so PSSD can remain nonzero even when $\rho=0$.
+\end{remark}
+
+\begin{proposition}[Finite-Sample Confidence]
+\label{prop:confidence}
+Let $\hat{\rho}$ be computed from $N_f, N_r$ samples. For sub-Gaussian softmax vectors with variance proxy $\nu^2$,
+\begin{equation}
+\mathbb{P}\!\left(|\hat{\rho} - \rho^*| \le \frac{4\nu}{\sigma_1}\sqrt{\frac{C\log(4C/\delta)}{N_{\min}}}\right) \ge 1-\delta,
+\end{equation}
+where $N_{\min}=\min(N_f,N_r)$. To achieve error $\le\varepsilon$ with confidence $1-\delta$, sample $N_{\min} \ge 16C\nu^2\log(4C/\delta)/(\sigma_1^2\varepsilon^2)$ from each set.
+\end{proposition}
+
+\begin{theorem}[Fine-Tuning Leakage Bound]
+\label{thm:finetune}
+For one-step gradient ascent $\theta' = \theta_0 + \lambda\nabla_\theta\mathcal{L}(\theta_0, D_f)$ with $L$-Lipschitz gradient,
+\begin{equation}
+\rho(\theta') \le \frac{\lambda^2 L^2}{2\sigma_1^2}\,\operatorname{Tr}\bigl(\boldsymbol{\Sigma}_f\bigr) + O(\lambda^3),
+\label{eq:finetune_bound}
+\end{equation}
+where $\boldsymbol{\Sigma}_f \coloneqq \operatorname{Cov}_{x\sim D_f}(\nabla_\theta f_{\theta_0}(x))$ is the gradient covariance on the forget set and $\sigma_1$ is the leading singular value of the channel at $\theta_0$. Hence $\rho = O(\lambda^2)$ for small steps.
+\end{theorem}
+
+\paragraph{Class-level forgetting: controlled error analysis.}
+For class-level forgetting ($D_f$ = all samples of class $c_f$), gradients on $D_f$ and $D_r$ are correlated. The cross-entropy loss has a special structure that lets us control this correlation. Its logit gradient is $\nabla_z\ell(z,y)=\mathbf{p}(z)-\mathbf{e}_y$, where $\mathbf{e}_y$ is the one-hot vector. For samples from different classes $c_f\neq c_r$:
+\begin{equation}
+\langle\nabla_z\ell_f,\nabla_z\ell_r\rangle = \langle\mathbf{p}_f,\mathbf{p}_r\rangle - p_f(c_r) - p_r(c_f).
+\end{equation}
+At $\theta_0$ (well-trained classifier), $p_f(c_f){\approx}1$ and $p_r(c_r){\approx}1$, so this inner product is $\approx0$. After the $\lambda$ gradient step, logits shift by $O(\lambda)$, and softmax $1$-Lipschitz continuity gives $\|\nabla_z\ell' - \nabla_z\ell\|_2\le\|\Delta z\|_2 = O(\lambda)$. Hence $|\langle\nabla_z\ell'_f,\nabla_z\ell'_r\rangle| = O(\lambda)$, implying the parameter-space cross-covariance $\boldsymbol{\Sigma}_{fr} \coloneqq \operatorname{Cov}(\nabla_\theta\ell_f,\nabla_\theta\ell_r)$ satisfies $\|\boldsymbol{\Sigma}_{fr}\|_F = O(\lambda)$ (Lemma~\ref{lem:cross_cov}, Appendix~\ref{app:finetune}).
+
+Consequently, the class-level bound preserves the $O(\lambda^2)$ rate (Eq.~\eqref{eq:class_finetune}):
+\begin{equation}
+\rho(\theta') \le \frac{\lambda^2 L^2}{2\sigma_1^2}\,\mathrm{Tr}(\boldsymbol{\Sigma}_f) \;+\; O(\lambda^3),
+\label{eq:class_finetune}
+\end{equation}
+where the $O(\lambda^3)$ term absorbs the cross-covariance contribution (Appendix~\ref{app:finetune}). The $O(\lambda^2)$ rate is maintained because $\|\boldsymbol{\Sigma}_{fr}\|_F = O(\lambda)$ adds only a higher-order correction, negligible at practical learning rates ($\lambda{\sim}10^{-5}$).
+
+
+\begin{theorem}[Spectral $\chi^2$–MI Bound]
+\label{thm:mi_bound}
+For binary membership $X$ and predicted class $Y$ under $\theta'$, when the channel rows have equal norm, $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$ (the case used in Def.~\ref{def:M}),
+\begin{equation}
+I(X; Y \mid \theta') \le \frac{2\sigma_1^2}{\pi_{\min}}\cdot\frac{\rho}{1-\rho},
+\end{equation}
+where $\pi_{\min} \coloneqq \min_y P_r(y) > 0$ and $P_r(y)=P(Y{=}y\mid X{=}r)$. For $\rho\ll 1$, $I \le O(\rho)$; the bound vanishes as $\rho\to0$, and holds asymptotically without the equal-norm condition (proof in Appendix~\ref{sec:appendix}).
+\end{theorem}
+
+\paragraph{Signal model.}
+We model the observed post-removal output as $R = \alpha X + \beta Y + N$, $N \sim \mathcal{N}(0,\sigma^2)$, where $X$ is the forget/retain indicator, $Y$ the channel output, and $\alpha,\beta$ coupling coefficients. This captures two orthogonal leakage pathways: direct signal leakage ($\propto \alpha^2$, detected by MIA) and cover leakage ($\propto \eta^2$, the spectral deviation from rank one, detected by RII).
+
+\begin{lemma}[Small-$\alpha$ Fisher Information Expansion]
+\label{lem:fisher}
+For $R = \alpha X + Z$ with $X \perp Z$, as $\alpha \to 0$:
+$I(X;R) = \frac{\alpha^2}{2}\mathrm{Var}(X)J(Z) + o(\alpha^2)$, where $J(Z)$ is the Fisher information of $Z$. For Gaussian noise, $J(N) = 1/\sigma^2$.
+\end{lemma}
+
+\begin{theorem}[Unified Leakage Decomposition]
+\label{thm:unified}
+Under the signal model $R = \alpha X + \beta Y + N$ with channel singular values $\{\sigma_k\}$,
+\begin{equation}
+I(X; R) \le \frac{\alpha^2}{2\sigma^2}\operatorname{Var}(X) \;+\; \eta^2 \;+\; o(\alpha^2 + \eta^2),
+\end{equation}
+where $I_{\mathrm{dir}} \propto \alpha^2$ (direct leakage, measured by MIA) and $I_{\mathrm{cov}} = \eta^2 = \sum_{k\ge 2}\sigma_k^2$ (cover leakage, measured by RII).
+\end{theorem}
+
+\paragraph{Orthogonal leakage axes.}
+MIA accuracy tracks the direct axis $I_{\mathrm{dir}}$ (distributional shift); RII tracks the cover axis $I_{\mathrm{cov}}$ (output-level indistinguishability). Both can be large simultaneously---they are independent dimensions of leakage (see Sec.~\ref{sec:mia}).
+
+\paragraph{Continuous analogue.}
+The discrete $2\times C$ analysis lifts to continuous spaces via Hilbert--Schmidt operator theory, where the deviation parameter $\eta^2=\sum_{k\ge2}\sigma_k^2$ underlies Theorem~\ref{thm:unified} (Appendix~\ref{app:bridge}).
+
+%=============================================================================
+\section{Experimental Evaluation}
+\label{sec:experiments}
+%=============================================================================
+
+\subsection{Setup}
+
+\textbf{Datasets and models:} MNIST (60K, 10 classes), Fashion-MNIST (60K, 10), CIFAR-10 (50K, 10), CIFAR-100 (50K, 100), Tiny ImageNet (100K, 200). Architectures: SimpleMLP (784$\to$128$\to$10), SmallCNN (3 conv + 2 fc), ResNet-18, DeepMLP (for overfitting). Training: Adam, lr $10^{-3}$, batch 64, 10 epochs.
+
+\textbf{Unlearning methods:} NoUnlearn (no removal), Retrain (gold standard), SISA~\cite{bourtoule2021machine} ($S{=}5$ shards), FineTune (gradient ascent on $D_f$ + descent on $D_r$), KED (knowledge erosion via KL-to-uniform on $D_f$), and BadTeacher (wrong-label training on $D_f$).
+
+\textbf{Benchmark protocol.} In Section~\ref{sec:benchmark} we adopt a standard class-level protocol on CIFAR-10: the model is trained on classes $\{0,\dots,6\}$, class~3 (cat) is the forget set, and classes $\{7,8,9\}$ are held out as unseen MHPR references ($K{=}3$). Models are trained without data augmentation for determinism, and every unlearning method is evaluated with the \emph{same} battery of metrics.
+
+\paragraph{Key findings.} Three findings recur across the experiments that follow. (i) \emph{Rank-one baseline}: standard training induces near-rank-one output channels ($\rho<5\times10^{-3}$), so RII is a stable, tuning-free quantity; random sample-level forgetting is trivially indistinguishable, whereas class-level forgetting is not (Sec.~\ref{sec:benchmark}). (ii) \emph{Discriminative spectral ranking}: under class-level forgetting, RII and MHPR rank unlearning methods consistently with forgetting strength, and RII uniquely exposes methods that leave---or even strengthen---an output signature that accuracy and MIA miss. (iii) \emph{Partial orthogonality}: RII and MIA measure overlapping but distinct leakage axes ($r{=}0.81$), so a complete audit should report both.
+
+\subsection{Baseline: Near-Rank-One Outputs under Standard Training}
+
+Although this work focuses on class-level forgetting, we first establish a brief random (sample-level) baseline: it isolates the near-rank-one structure of standard training and shows RII is not degenerate, since random subsets are trivially indistinguishable while coherent semantic classes (Sections~\ref{sec:mhpr} and \ref{sec:benchmark}) are not. These results serve as a control baseline only.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Rank-one baseline: RII under standard training (5\% random forget).}\label{tab:main}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c c}
+\toprule
+Dataset & Method & Acc.(\%) & $\rho$ & MIA(\%) \\
+\midrule
+\multirow{4}{*}{MNIST}
+& NoUnlearn & 97.45 & $9.762\times10^{-4}$ & 90.4 \\
+& Retrain   & 97.86 & $9.083\times10^{-4}$ & 90.7 \\
+& SISA      & 96.97 & $9.454\times10^{-4}$ & 90.6 \\
+& FineTune  & 98.29 & $9.612\times10^{-4}$ & 90.5 \\
+\midrule
+CIFAR-10 & NoUnlearn & 76.1 & $1.20\times10^{-3}$ & 90.5 \\
+CIFAR-100 & NoUnlearn & 20.8 & $7.10\times10^{-4}$ & 90.5 \\
+Fashion-MNIST & NoUnlearn & 88.7 & $2.83\times10^{-4}$ & 90.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:main} reveals four key findings. First, $\rho<5\times10^{-3}$ uniformly---standard neural network training induces near-rank-one output channels. Second, $\rho$ is accuracy-independent: CIFAR-100 at 20\% accuracy yields \emph{lower} $\rho$ than MNIST at 97.5\%, confirming the rank-one property is intrinsic to the softmax output simplex. Third, all four methods yield nearly identical $\rho$, as expected: for random subsets, the model's generalization makes outputs indistinguishable even without explicit unlearning. (Retrain shows a slightly lower $\rho$ at $9.083\times10^{-4}$, possibly because retraining from scratch with random initialization reshapes the output simplex marginally; this $<8\%$ variation does not affect our conclusions.) Fourth, across 10 random seeds, $\rho$ has standard deviation $<3.5\times10^{-4}$, enabling reliable single-run auditing. Together these findings motivate the class-level focus of this work: under random forgetting RII is near-trivial (all methods are indistinguishable), whereas class-level forgetting is precisely the regime in which RII and MHPR become discriminative (Sections~\ref{sec:mhpr} and \ref{sec:benchmark}).
+
+\subsection{Benchmark Comparison on a Unified Protocol}
+\label{sec:benchmark}
+
+Table~\ref{tab:benchmark} evaluates seven unlearning methods under the protocol above with a single battery of metrics: retain/forget accuracy, RII $\rho$, MHPR ($K{=}3$), MIA (loss-threshold AUC), representation-level MMD on penultimate features, and a residual linear probe that attempts to separate forget-class features from held-out unseen-class features.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Class-level unlearning benchmark on CIFAR-10 (forget cat, $K{=}3$ held-out).}\label{tab:benchmark}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c c c c c}
+\toprule
+Method & Ret.(\%) & For.(\%) & $\rho$ & MHPR & MIA-loss & reprMMD & probe \\
+\midrule
+NoUnlearn & 93.7 & 67.9 & $2.33{\times}10^{-1}$ & 0.812 & 0.160 & 0.132 & 0.970 \\
+Retrain (oracle) & 93.5 & 0.0 & $9.15{\times}10^{-2}$ & 0.428 & 0.000 & 0.087 & 0.959 \\
+NegGrad & 94.6 & 63.4 & $\mathbf{2.54{\times}10^{-1}}$ & 0.831 & 0.128 & 0.128 & 0.971 \\
+FineTune & 98.0 & 29.2 & $2.08{\times}10^{-1}$ & 0.642 & 0.025 & 0.140 & 0.978 \\
+KED & 97.2 & 1.7 & $1.21{\times}10^{-1}$ & 0.457 & 0.003 & 0.130 & 0.981 \\
+BadTeacher & 97.9 & 17.0 & $1.63{\times}10^{-1}$ & 0.344 & 0.013 & 0.137 & 0.977 \\
+SISA & 69.9 & 0.0 & $6.42{\times}10^{-2}$ & 0.090 & 0.004 & 0.056 & 0.920 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Known/unknown asymmetry.} Even the retraining oracle (mathematically perfect unlearning) has nonzero RII, $\rho{=}9.15{\times}10^{-2}$: because cat is now an \emph{unseen} class, its output distribution differs from the retain classes, so standard RII cannot certify the oracle as perfect under class-level forgetting. MHPR narrows the gap to NoUnlearn ($0.428$ vs $0.812$).
+
+\textbf{NegGrad reveals a hidden failure.} Gradient ascent (NegGrad) is the \emph{only} method whose RII \emph{rises} with unlearning ($2.54{\times}10^{-1}$ vs $2.33{\times}10^{-1}$ for NoUnlearn, Table~\ref{tab:benchmark}), even though forget accuracy and MIA-loss improve. Ascent drives the forget class toward confident, systematically wrong predictions, concentrating the output signature and making the channel \emph{more} distinguishable. RII is the only metric in our battery that exposes this failure. Together with the fine-tune rebound (Section~\ref{sec:rebound}), output-space erasure is not monotone in gradient-based forgetting strength.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Pearson correlations of evaluation metrics across the seven unlearning methods (CIFAR-10).}
+\label{tab:corr}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l c c c c c c}
+\toprule
+ & RII & MHPR & For. & MIA & MMD & probe \\
+\midrule
+RII & 1.00 & & & & & \\
+MHPR & 0.91 & 1.00 & & & & \\
+For. & 0.93 & 0.87 & 1.00 & & & \\
+MIA & 0.81 & 0.81 & 0.96 & 1.00 & & \\
+MMD & 0.78 & 0.70 & 0.54 & 0.39 & 1.00 & \\
+probe & 0.61 & 0.64 & 0.34 & 0.21 & 0.94 & 1.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Consistency and orthogonality.} RII and MHPR are strongly consistent ($r{=}0.91$) and track forget accuracy ($r{=}0.93$ and $0.87$); RII correlates only moderately with MIA-loss ($r{=}0.81$) and disagrees at the top---NegGrad is worst under RII but second-best under MIA---supporting the orthogonal-axes view (Section~\ref{sec:mia}). Representation MMD correlates with RII at $r{=}0.78$; the full matrix is in Table~\ref{tab:corr}.
+
+\textbf{Representation-level residuals.} A residual linear probe separating forget-class from held-out features succeeds for \emph{all} methods ($\mathrm{AUC}\approx0.92$--$0.98$), including the oracle ($0.959$): output-level erasure coexists with representation-level signatures, consistent with~\cite{cosma2026ruler,yong2026erased} and motivating the two-layer audit (Section~\ref{sec:mia}).
+
+\textbf{Caveats.} (1) SISA's low retain accuracy ($69.9\%$) reflects a light training budget ($5$ shards $\times$ $2$ slices), so its near-zero spectral scores are partly a utility artifact. (2) Absolute MHPR on CIFAR-10 is higher than on MNIST because $\{7,8,9\}$ are not semantically close to cat; MHPR is most discriminative when the held-out reference is representative. (3) MIA-loss AUC is below $0.5$ because cat is harder than the retain classes ($67.9\%$ vs $93.7\%$ forget/retain accuracy); relative ordering is meaningful.
+
+\textbf{Cross-dataset generalization.} Table~\ref{tab:cross} repeats the protocol on Fashion-MNIST with an MLP. RII remains discriminative: the NegGrad failure persists ($\rho{=}0.162$ vs $0.160$), the oracle keeps nonzero RII ($6.54{\times}10^{-2}$), and KED attains the lowest RII. MHPR, however, is non-discriminative without temperature scaling: values span $0.005$--$0.65$, with the oracle ($0.217$) ranked \emph{above} NoUnlearn ($0.005$). This is the subspace-collapse regime of Section~\ref{sec:mhpr}: for a low-accuracy model the held-out means are nearly collinear; the temperature-scaled variant ($T{=}50$ on Fashion-MNIST, $\rho_H{=}0.021$) restores discriminability. Representation probes again saturate near $\mathrm{AUC}{=}1$.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Cross-dataset benchmark with an identical protocol: RII/MHPR/MIA on CIFAR-10 (SmallCNN) and Fashion-MNIST (MLP).}\label{tab:cross}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c | c c c}
+\toprule
+ & \multicolumn{3}{c|}{CIFAR-10} & \multicolumn{3}{c}{Fashion-MNIST} \\
+Method & $\rho$ & MHPR & MIA & $\rho$ & MHPR & MIA \\
+\midrule
+NoUnlearn & $2.33{\times}10^{-1}$ & 0.812 & 0.160 & $1.60{\times}10^{-1}$ & 0.005 & 0.510 \\
+Retrain (oracle) & $9.15{\times}10^{-2}$ & 0.428 & 0.000 & $6.54{\times}10^{-2}$ & 0.217 & 0.000 \\
+NegGrad & $\mathbf{2.54{\times}10^{-1}}$ & 0.831 & 0.128 & $1.62{\times}10^{-1}$ & 0.006 & 0.489 \\
+FineTune & $2.08{\times}10^{-1}$ & 0.642 & 0.025 & $2.54{\times}10^{-1}$ & 0.628 & 0.120 \\
+KED & $1.21{\times}10^{-1}$ & 0.457 & 0.003 & $\mathbf{5.28{\times}10^{-2}}$ & 0.147 & 0.010 \\
+BadTeacher & $1.63{\times}10^{-1}$ & 0.344 & 0.013 & $1.32{\times}10^{-1}$ & 0.178 & 0.008 \\
+SISA & $6.42{\times}10^{-2}$ & 0.090 & 0.004 & $9.08{\times}10^{-2}$ & 0.645 & 0.002 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{CIFAR-100: stronger signal at larger class counts.} Table~\ref{tab:cifar100} repeats the protocol with 20 training classes (forget class~3, held-out $\{20,21,22\}$). The NegGrad hidden failure is \emph{more salient} at scale: its RII ($2.12{\times}10^{-1}$) exceeds even NoUnlearn ($1.36{\times}10^{-1}$, a $1.56\times$ gap vs.\ $1.09\times$ on CIFAR-10) while forget accuracy and MIA-loss again improve---the output signature strengthened by gradient ascent is sharper in a larger output space. The known/unknown asymmetry persists (oracle $\rho{=}1.35{\times}10^{-1}$), and MHPR again separates the oracle ($0.103$) from NoUnlearn ($0.281$). Six methods are reported; SISA is omitted because its 20-class sharded training is disproportionate at this scale.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Class-level unlearning benchmark on CIFAR-100 (20 train classes, forget class~3, $K{=}3$ held-out $\{20,21,22\}$).}\label{tab:cifar100}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c c c}
+\toprule
+Method & Ret.(\%) & For.(\%) & $\rho$ & MHPR & MIA-loss \\
+\midrule
+NoUnlearn & 84.1 & 76.4 & $1.36{\times}10^{-1}$ & 0.281 & 0.278 \\
+Retrain (oracle) & 87.5 & 0.0 & $1.35{\times}10^{-1}$ & 0.103 & 0.000 \\
+NegGrad & 83.9 & 35.2 & $\mathbf{2.12{\times}10^{-1}}$ & 0.461 & 0.115 \\
+FineTune & 92.8 & 39.8 & $1.73{\times}10^{-1}$ & 0.238 & 0.076 \\
+KED & 93.5 & 35.2 & $1.75{\times}10^{-1}$ & 0.263 & 0.056 \\
+BadTeacher & 93.1 & 44.8 & $1.57{\times}10^{-1}$ & 0.209 & 0.086 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Cross-modal evidence.} The benchmarks above are visual, and whether the spectral certificate transfers to other modalities is a natural question. We repeat the protocol on text. On AG News (four classes, forget set $=$ World news), a DistilBERT classifier~\cite{sanh2020distilbert} fine-tuned for two epochs shows the same ordering as in vision: RII separates the untouched model ($\rho{=}0.267$) from the retraining oracle ($\rho{=}0.090$), a $2.96{\times}$ gap consistent with the CIFAR-10 results. Gradient ascent behaves differently here: it collapses the model outright (retain accuracy falls to $37.5\%$, $\rho{\approx}0$), an explicit rather than hidden failure. A low RII is thus necessary but not sufficient evidence of erasure---it must be read together with retain accuracy to tell true removal from model collapse, in line with the two-axis view of Section~\ref{sec:mia}. The same picture emerges on a small language model (Qwen2.5-0.5B~\cite{qwen2024qwen2}) under the author-level TOFU~\cite{maini2024tofu} protocol: fine-tuning on the retain set after exposure leaves the forget answers intact (accuracy unchanged), reproducing the rebound of Section~\ref{sec:rebound} in a decoder-only model, whereas gradient ascent again destroys the model ($\rho{\to}0$, loss grows by an order of magnitude). The author-level setting also exposes a genuine boundary: with vocabulary-level output channels the forget and retain question sets yield statistically similar text distributions, so RII cannot separate the oracle from the untouched model ($\rho{=}0.080$ vs.\ $0.083$). This is Remark~\ref{rem:channel} made concrete---the certificate's discriminative power lies in the \emph{class semantics} of the output channels, and language-model audits should use class-level channels (e.g.\ a classification head over authors) rather than the raw vocabulary.
+
+\subsection{Dynamic Range and Gradient Sweep}
+
+\begin{table}[t]
+\centering
+\small
+\caption{RII dynamic range (CIFAR-10, cat class).}\label{tab:dynamic_range}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c}
+\toprule
+Scenario & $\rho$ & $\sigma_2/\sigma_1$ \\
+\midrule
+Random 5\% (NoUnlearn) & $1.20\times10^{-3}$ & 0.035 \\
+Cat class (baseline)   & $\mathbf{1.83\times10^{-1}}$ & 0.47 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:dynamic_range} shows $\rho$ for class forgetting is \textbf{152$\times$ larger} than random forgetting, demonstrating RII is not degenerate. RII decreases monotonically with gradient ascent steps (Table~\ref{tab:gradient_sweep}), consistent with the $O(\lambda^2)$ bound of Eq.~\eqref{eq:finetune_bound} (Theorem~\ref{thm:finetune}), where $\lambda$ is the ascent step size.
+
+\begin{table}[t]
+\centering
+\small
+\caption{RII vs.\ gradient ascent steps (CIFAR-10, cat class).}\label{tab:gradient_sweep}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{c c c c}
+\toprule
+Steps & $\rho$ & Acc.(\%) & $\sigma_2/\sigma_1$ \\
+\midrule
+0 & $1.83\times10^{-1}$ & 76.2 & 0.47 \\
+1 & $1.95\times10^{-1}$ & 71.9 & 0.48 \\
+3 & $1.76\times10^{-1}$ & 71.2 & 0.46 \\
+10 & $1.05\times10^{-1}$ & 69.2 & 0.34 \\
+30 & $1.25\times10^{-2}$ & 58.4 & 0.11 \\
+100 & $2.04\times10^{-3}$ & 25.4 & 0.05 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{MHPR Evaluation}
+
+\begin{table}[t]
+\centering
+\small
+\caption{MHPR vs.\ LOCO (MNIST class forgetting, train on 8 classes, forget class~5).}\label{tab:mhpr}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{c c c c}
+\toprule
+$K$ & $\rho_{\mathrm{std}}$ & $\rho_{\mathrm{LOCO}}$ & $\rho_H$ \\
+\midrule
+1 & 0.145 & 0.379 & 0.942 \\
+2 & 0.141 & 0.348 & 0.789 \\
+\textbf{3} & 0.136 & 0.310 & \textbf{0.046} \\
+4 & 0.142 & 0.167 & \textbf{0.0008} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:mhpr} compares MHPR with LOCO. MHPR projects the forgotten class mean onto the span of $K$ held-out unseen classes (Sec.~\ref{sec:mhpr}); on MNIST class forgetting, $K\ge3$ resolves the LOCO failure: $K{=}1$ gives $\rho_H{=}0.942$ (worse than LOCO, as a single reference misses the unseen-class manifold), while $K{=}3$ drops $\rho_H$ to $0.046$---an order of magnitude below $\rho_{\mathrm{std}}{=}0.136$ and $\rho_{\mathrm{LOCO}}{=}0.310$. $K{=}4$ reaches $0.0008$ (near machine zero) but costs training data (accuracy $79.5\%{\to}48.7\%$). We recommend $K{=}3$.
+
+Cross-dataset, adaptive temperature scaling extends MHPR to low-accuracy regimes where the held-out subspace would otherwise collapse. On Fashion-MNIST ($88.7\%$ accuracy), $T{=}50$ reduces $\rho_H$ from $\sim1$ to $0.021$; on CIFAR-10 ($75\%$), $T{=}5$ gives $\rho_H{=}0.025$. These compare favorably to the class-level RII baselines of $0.102$ and $0.064$ respectively.
+
+\paragraph{Ideal forgetting construction.} To further validate MHPR, we construct a synthetic forget-mean $\boldsymbol{\mu}_f$ that lies \emph{exactly} in the span of $K{=}5$ held-out Fashion-MNIST class means. The resulting $\rho_H$ is machine zero ($<10^{-10}$). Injecting isotropic noise $\boldsymbol{\varepsilon}\sim\mathcal{N}(0,\varepsilon^2\mathbf{I})$ increases $\rho_H$ monotonically: $\varepsilon{=}0.01$ gives $\rho_H{=}0.005$, $\varepsilon{=}0.10$ gives $\rho_H{=}0.237$. This confirms $\rho_H{=}0$ iff $\boldsymbol{\mu}_f$ lies in the held-out subspace, directly validating Proposition~\ref{prop:mhpr_monotone}.
+
+\subsection{FineTune Rebound and Sensitivity}
+\label{sec:rebound}
+
+As discussed above (Sec.~\ref{sec:benchmark}), RII consistently ranks gradient ascent as the weakest class-level unlearning method. This subsection asks a follow-up question: \emph{does that ranking persist under the common ascent-then-fine-tune recipe used in practice?}
+
+\paragraph{FineTune rebound.} When gradient ascent on $D_f$ is followed by fine-tuning on $D_r$, $\rho$ rises from $0.105$ (ascent only) to $0.221$ (ascent $+$ fine-tune), exceeding even the baseline $0.183$ (Table~\ref{tab:rebound}). Theorem~\ref{thm:unified} explains this: ascent reduces cover leakage $\eta^2$, but fine-tuning reshapes decision boundaries and re-misaligns the forget representations, inflating $\sigma_2$---a failure that accuracy-based measures miss.
+
+\begin{table}[t]
+\centering
+\small
+\caption{FineTune rebound phenomenon (CIFAR-10, cat class).}\label{tab:rebound}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c}
+\toprule
+Operation & $\rho$ & Acc.(\%) & $\sigma_2/\sigma_1$ \\
+\midrule
+Baseline (no unlearning) & 0.183 & 76.2 & 0.47 \\
+Ascent 10 steps & 0.105 & 69.2 & 0.34 \\
+Ascent 10 + FineTune & \textbf{0.221} & 75.2 & 0.52 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Cross-dataset and sensitivity.} $\rho\le2\times10^{-3}$ for $C{=}10$--$200$ (MNIST, CIFAR-10/100, Tiny ImageNet), confirming the rank-one property is structural. Under deliberate overfitting (Table~\ref{tab:sensitivity}, Appendix~\ref{app:extra}), $\rho$ surges $10\times$ (MNIST 60K$\to$5K, 50 epochs: $9.8\times10^{-4}\to1.24\times10^{-2}$). The controlled $\alpha$-perturbation confirms orthogonal axes: $\alpha{=}0.20$ raises RII $9\times$ while MIA rises only $6.8$pp. ResNet-18 on CIFAR-100 keeps $\rho{=}1.41\times10^{-3}$ (Table~\ref{tab:resnet18}), confirming architecture independence.
+
+\paragraph{Per-sample MHPR gap.} Proposition~\ref{prop:ps_mhpr} predicts $\bar{\rho}_H \ge \|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}}$ (Jensen gap). In our MNIST experiments $\rho_{H,\mathcal{S}}{\approx}0.99999$ and $\bar{\rho}_H{\approx}0.99932$ at baseline, a gap of ${\approx}0.00066$ shrinking to $0.00023$ after 100 gradient steps; larger gaps are expected on more heterogeneous data, making per-sample MHPR more conservative.
+
+\subsection{Large-Scale Validation and Sensitivity}
+\label{app:extra}
+
+\begin{table}[t]
+\centering
+\small
+\caption{ResNet-18 on CIFAR-100.}\label{tab:resnet18}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l c c c c}
+\toprule
+Model & $|D_f|$ & Acc.(\%) & $\rho$ & $\sigma_2/\sigma_1$ \\
+\midrule
+SmallCNN & 2,500 & 20.8 & $7.10{\times}10^{-4}$ & 0.027 \\
+ResNet-18 & 2,500 & 29.7 & $1.41{\times}10^{-3}$ & 0.038 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\caption{RII sensitivity to overfitting.}\label{tab:sensitivity}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l l c c c c}
+\toprule
+Dataset & Model & $|D|$ & Ep. & Acc.(\%) & $\rho$ \\
+\midrule
+MNIST   & SimpleMLP & 60K & 10  & 97.45 & $9.8{\times}10^{-4}$ \\
+MNIST   & DeepMLP & 5K & 50 & 95.50 & $\mathbf{1.24{\times}10^{-2}}$ \\
+CIFAR-10 & SmallCNN & 50K & 10  & 76.34 & $1.5{\times}10^{-3}$ \\
+CIFAR-10 & SmallCNN & 5K & 50 & 61.63 & $\mathbf{1.31{\times}10^{-2}}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Under deliberate overfitting (Table~\ref{tab:sensitivity}), $\rho$ surges $10\times$, confirming sensitivity to memorization. Across 10 independent MNIST training runs (5\% random forget), $\rho$ has mean $9.72{\times}10^{-4}$ with standard deviation $2.1{\times}10^{-5}$ (CV $2.2\%$), and MIA has mean $90.4\%$ with s.d.\ $0.3\%$---both stable but orthogonal, as predicted by Theorem~\ref{thm:unified}.
+
+\subsection{Comparison with Existing Metrics}
+
+\begin{table}[t]
+\centering
+\caption{Comparison of unlearning evaluation metrics.}\label{tab:metric_compare}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l c c c}
+\toprule
+Metric & Info.-Theoretic & Tuning-Free & Complexity \\
+\midrule
+MIA~\cite{shokri2017membership} & no & no & medium \\
+DP~\cite{guo2020certified} & yes & no & high \\
+Backdoor~\cite{sommer2022towards} & no & no & high \\
+Repr.-level~\cite{cosma2026ruler} & no & no & high \\
+Audit~\cite{ye2026auditing} & no & no & high \\
+\textbf{RII} & \textbf{yes} & \textbf{yes} & $O(CN)$ \\
+\textbf{MHPR} & \textbf{yes} & \textbf{yes} & $O(KCN)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:metric_compare} compares RII and MHPR with existing metrics. RII is the only metric that simultaneously satisfies spectral grounding, hyperparameter-free computation, and $O(CN)$ complexity.
+
+%=============================================================================
+\section{Reconciling MIA and RII: Two Orthogonal Leakage Axes}
+\label{sec:mia}
+%=============================================================================
+
+Our experiments reveal an apparent paradox: MIA accuracy remains 77\%--94\% while $\rho \approx 10^{-3}$. Theorem~\ref{thm:unified} resolves this: MIA and RII measure orthogonal dimensions.
+
+\begin{itemize}
+\item \textbf{Distributional shift (MIA axis, $I_{\mathrm{dir}}$):} Any training sample tends to have higher confidence than test samples. MIA exploits this gap, distinguishing $P(\ell\mid\text{train})$ from $P(\ell\mid\text{test})$.
+\item \textbf{Sample-specific leakage (RII axis, $I_{\mathrm{cov}}$):} RII measures whether $P(Y\mid D_f,\theta') \neq P(Y\mid D_r,\theta')$, i.e., whether $D_f$ leaves a distinct output signature.
+\end{itemize}
+
+Retrain and NoUnlearn can exhibit near-identical RII while both show high MIA accuracy, because MIA detects training membership generally rather than whether a specific forget request has been honored. \textbf{RII certifies output-level forget/retain indistinguishability}---the relevant guarantee for erasure compliance.
+
+\begin{table}[t]
+\centering
+\caption{Controlled perturbation experiment showing orthogonal leakage axes (MNIST, 5\% forget).}\label{tab:alpha}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{c c c c}
+\toprule
+$\alpha$ & $\rho$ (RII) & MIA (\%) & Interpretation \\
+\midrule
+0.00 & $9.76{\times}10^{-4}$ & 90.4 & Baseline \\
+0.20 & $8.91{\times}10^{-3}$ & 97.2 & Strong direct leakage \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:alpha} confirms the asymmetric response predicted by Theorem~\ref{thm:unified}: as $\alpha$ increases, RII rises $9\times$ while MIA increases only 6.8 percentage points. This asymmetry directly reflects the independent axes of leakage. The same orthogonality appears under real unlearning methods (Section~\ref{sec:benchmark}): RII correlates with MIA-loss at only $r{=}0.81$, and the ranking reverses at the top---NegGrad is worst under RII but second-best under MIA.
+
+
+\paragraph{Beyond output.}
+Output-layer guarantees are necessary but not sufficient for white-box security. Using the chain rule $I(D_f;Y,\theta') = I(D_f;\theta') + I(D_f;Y\mid\theta')$, the total leakage decomposes as $I(D_f;\theta') = I(D_f;Y) + I(D_f;\theta'\mid Y) - I(D_f;Y\mid\theta')$. RII certifies the conditional term $I(D_f;Y\mid\theta')$ (output leakage given the model). The term $I(D_f;\theta'\mid Y)$---information in internal representations beyond the output---can be bounded by auditing internal features (e.g., MMD on penultimate activations). Together they form a complete two-layer certificate; full characterization is left to future work. Empirically (Section~\ref{sec:benchmark}), a residual probe on penultimate features separates forget from held-out samples with AUC ${\approx}0.96$ even for the retraining oracle, confirming that output-level certificates must be paired with representation-level audits.
+
+\paragraph{Comparison with existing metrics.}
+RII and MHPR are the only metrics that simultaneously satisfy spectral grounding, hyperparameter-free computation, and scale invariance. Unlike MIA (which conflates train/test shift with forget/retain leakage, $O(CN)$ but tuning-dependent), DP certification (invasive training), or backdoor-based audits (attack-dependent), RII directly quantifies whether the deleted data's influence has been removed from the model's output distribution (Table~\ref{tab:metric_compare}).
+
+%=============================================================================
+\section{Related Work}
+\label{sec:related}
+%=============================================================================
+
+\textbf{Machine Unlearning.} The field spans exact retraining~\cite{cao2015towards}, SISA~\cite{bourtoule2021machine}, gradient-based reversal~\cite{golatkar2020eternal}, deletion-based approaches~\cite{ginart2019making,sekhari2021remember}, and influence functions~\cite{guo2020certified}. Our contribution is orthogonal to any specific algorithm: an algorithm-agnostic \emph{evaluation metric} measuring output-space irreversibility.
+
+\textbf{Unlearning Evaluation.} Membership inference attacks~\cite{shokri2017membership,carlini2022membership} are the de facto standard, but MIA detects training membership generally rather than forget-set--specific leakage; differential privacy bounds~\cite{guo2020certified} give worst-case guarantees but require invasive training; backdoor audits are attack-dependent. RII is instead a tuning-free spectral certificate of output-level indistinguishability. PSSD (Appendix~\ref{app:pssd}) shares this philosophy: the $\delta(x)$ score is a certificate, not an attack---if $\delta(x)$ is low for all forget samples, no threshold-based MIA can separate them from retain samples, a stronger operational guarantee than empirical attack accuracy.
+
+\textbf{Verification beyond attacks.} Recent work shows models can pass output-level checks while retaining residual signatures in intermediate representations~\cite{cosma2026ruler,yong2026erased}; representation-level verification~\cite{cosma2026ruler} and general auditing frameworks~\cite{ye2026auditing} address this without shadow models or retraining baselines, while~\cite{zhang2024fragile} shows verification can be circumvented by dishonest providers and~\cite{zheng2026bias} analyzes classification-head bias in class-level unlearning; we refer to~\cite{xue2025verification} for a taxonomy. RII complements these: a purely output-level, tuning-free spectral certificate needing no shadow models or training-time modifications.
+
+\textbf{Information-Theoretic Security.} Our spectral analysis builds on Shannon's channel model~\cite{shannon1949communication} and modern information-theoretic security~\cite{bloch2021overview}: the Hilbert--Schmidt decomposition gives the continuous analogue of our $2\times C$ analysis, and the $\chi^2$-MI bounds are standard. The connection between singular-value decay and residual output leakage (Theorem~\ref{thm:unified}) extends information-theoretic privacy to unlearning, where the ``secret'' is forget-set membership rather than a fixed attribute.
+
+%=============================================================================
+\section{Deployment Considerations}
+\label{sec:deployment}
+%=============================================================================
+
+RII requires one forward pass over $D_f \cup D_r$, costing $O(C(N_f+N_r))$ time and $O(C)$ memory---negligible compared to model training. For large-scale forget sets, Proposition~\ref{prop:confidence} provides a subsampling guarantee: with
+\[
+N_{\min} \ge \frac{16C\nu^2}{\sigma_1^2\varepsilon^2}\log\frac{4C}{\delta}
+\]
+samples from each of $D_f$ and $D_r$, the estimate satisfies $|\hat{\rho}-\rho^*| \le \varepsilon$ with confidence $\ge 1-\delta$. With $\sigma_1\approx0.4$, $\nu\approx1$, and $C=10$, resolving $\rho$ at absolute accuracy $\varepsilon=10^{-2}$ requires $N_{\min}\approx7\times10^7$ in the worst case; the bound is conservative (a union bound over $C$ coordinates and mean-value constants), and in practice per-class budgets of $\sim10^4$ samples---as in our MNIST-scale audits---resolve the relevant spectral regime. MHPR requires $K$ additional forward passes on held-out classes.
+
+\paragraph{Recommended audit protocol.}
+(1) Draw $N_{\min}$ samples uniformly from $D_f$ and $D_r$ (and each held-out class for MHPR). (2) Compute $\hat{\rho}$ (or $\hat{\rho}_H$), applying temperature scaling if model accuracy $\lesssim 90\%$. (3) Report $[\hat{\rho}-\varepsilon,\;\hat{\rho}+\varepsilon]$ as a conservative high-probability interval at level $1-\delta$. (4) For a two-axis assessment, report MIA AUC alongside RII to bound the total leakage via $I(D_f;\theta') \lesssim I_{\mathrm{RII}} + I_{\mathrm{MIA}}$.
+
+\paragraph{Estimating the direct leakage parameter $\alpha$.}
+The unified decomposition separates leakage into $I_{\mathrm{cov}}\propto\eta^2$ (measured by RII) and $I_{\mathrm{dir}}\propto\alpha^2$. While $\eta$ is directly computable from the channel matrix, $\alpha$ is not observable in black-box audits; MIA advantage over random guessing provides a lower bound, since $\mathrm{AUC}>0.5$ implies $\alpha>0$ and the gap $\mathrm{AUC}-0.5$ scales monotonically with $|\alpha|$. A two-axis audit---RII for cover leakage, MIA AUC for direct leakage---therefore bounds the total output leakage via $I(D_f;\theta') \lesssim I_{\mathrm{RII}} + I_{\mathrm{MIA}}$, without observing $\alpha$ directly: RII certifies that the forget set's output signature is erased, while MIA AUC bounds the residual distributional shift a black-box attacker could exploit.
+
+%=============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+%=============================================================================
+
+In this paper, we introduced a spectral certificate of output-space irreversibility in class-level machine unlearning. The central insight---the rank-one output channel as a certificate of output distributional irreversibility---yields a tuning-free metric (RII) together with theoretical guarantees and empirical validation on a unified benchmark. For class-level forgetting, the MHPR extension resolves the known/unknown class asymmetry by projecting onto multiple held-out unseen classes, with temperature scaling covering low-accuracy regimes. On a unified protocol across CIFAR-10, Fashion-MNIST, and CIFAR-100, RII ranks seven unlearning methods consistently with forgetting strength and exposes two failures that accuracy and MIA miss: gradient ascent \emph{strengthens} the forget class's output signature (increasingly at larger class counts), and fine-tuning after ascent induces a rebound in leakage. The PSSD extension (Appendix~\ref{app:pssd}) addresses the information loss of mean-based metrics at the per-sample level.
+
+Key empirical findings: (i) the rank-one baseline holds under standard training ($\rho<5\times10^{-3}$ across all datasets, random-subset baseline), surging $10\times$ under overfitting; (ii) MIA and RII measure orthogonal leakage axes, resolving the apparent paradox of near-zero RII with high MIA accuracy; (iii) MHPR with $K=3$ provides a reliable class-level forgetting metric with temperature scaling extending it to low-accuracy regimes; (iv) $\delta$-based MIA (PSSD) achieves $\mathrm{AUC}>0.94$ across MLP-based datasets, exploiting logit geometry that remains discriminative when softmax confidence is random; (v) a pilot cross-modal study shows the ordering transfers to text classification (a $2.96\times$ gap between untouched and retrained DistilBERT) and reproduces the fine-tune rebound in a small language model, while exposing that vocabulary-level channels lack the class semantics needed for discriminative RII in author-level forgetting.
+
+\paragraph{Practical recommendations.}
+For practitioners, RII requires only one forward pass over the forget and retain sets ($O(CN)$ time, $O(C)$ memory), making it deployable as a routine compliance check. Concretely: (1) use RII as a standard black-box audit for unlearning compliance; (2) for class-level forgetting, use MHPR with $K=3$ and adaptive temperature selection; (3) report RII alongside MIA for a two-axis leakage assessment; (4) for per-sample leakage detection, use the PSSD framework with $M=20$ quantized states. The subsampling formula (Proposition~\ref{prop:confidence}) enables efficient auditing at scale (Section~\ref{sec:deployment}).
+
+\paragraph{Future work.}
+Directions include: a formal DP--RII connection, scaling the pilot cross-modal results to instruction-tuned language models (the TOFU and MUSE suites~\cite{maini2024tofu,li2024muse} with 7B-class models and class-level output channels), the multi-layer state-trajectory extension of PSSD (Appendix~\ref{app:pssd}), combining RII with internal representation audits for full white-box certification, and ImageNet-scale validation.
+
+%=============================================================================
+\appendix
+\section{PSSD: A Per-Sample State Disparity Extension}
+\label{app:pssd}
+%=============================================================================
+
+RII and MHPR certify output-level indistinguishability of the channel but cannot detect anomalous \emph{individual} samples (Remark~\ref{rem:channel}). This appendix develops PSSD (Per-Sample State Disparity), a measure-then-average refinement that computes a disparity score per sample. The core RII/MHPR contribution of the paper does not depend on this extension.
+
+\subsection{Definitions}
+
+Let $Q:\mathbb{R}^C\to\{1,\dots,M\}$ be the $k$-means quantizer of \S\ref{sec:logit_bridge}. The \textbf{retain reference distribution} is
+\begin{equation}
+\pi_r(s) = \frac{1}{N_r}\sum_{x\in D_r}\mathbf{1}\{Q(z(x))=s\}, \qquad \boldsymbol{\pi}_r\in\Delta^{M-1}.
+\end{equation}
+
+\begin{definition}[Individual State Disparity (ISD)]
+\label{def:isd}
+For $x$ with state $s(x)=Q(z(x))$, $\delta(x)\coloneqq 1-\pi_r(s(x))\in[0,1-1/M]$, measuring how ``surprising'' the sample's logit state is relative to the retain distribution.
+\end{definition}
+
+\begin{definition}[Aggregate PSSD Metrics]
+\label{def:pssd_agg}
+\begin{align}
+\textbf{MPSD:}\quad &\Delta_f \coloneqq \frac{1}{N_f}\sum_{x\in D_f}\delta(x), &
+\textbf{Excess:}\quad &\Psi \coloneqq \Delta_f - \Delta_r,\\
+\textbf{Top-$k$:}\quad &\Delta_{(k)} \coloneqq \frac{1}{k}\sum_{i=1}^k\delta_{[i]},
+\end{align}
+where $\delta_{[1]}\ge\cdots$ are order statistics. $\Psi$ quantifies the \emph{additional} surprise of forget samples beyond baseline, while $\Delta_{(k)}$ captures worst-case individual leakage.
+\end{definition}
+
+\subsection{Theoretical Guarantees}
+
+\begin{proposition}[PSSD--RII Connection]
+\label{prop:pssd_rii}
+$\Delta_f = 1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$. When $\|\boldsymbol{\pi}_f\|_2=\|\boldsymbol{\pi}_r\|_2=s$, the state-space RII satisfies $\rho_{\mathcal{S}}=\frac{s-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{2s}=\frac{1}{2}\bigl(1-\frac{\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{\|\boldsymbol{\pi}_f\|_2^2}\bigr)$. The gap $|\Delta_f-\rho_{\mathcal{S}}|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/M)+O(\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_2^2)$. Hence $\Delta_f$ and $\rho_{\mathcal{S}}$ are asymptotically equivalent as $\boldsymbol{\pi}_f\to\boldsymbol{\pi}_r$, and $\rho_{\mathcal{S}}=0$ iff $\Delta_f = 1-\|\boldsymbol{\pi}_r\|_2^2$.
+\end{proposition}
+
+\begin{proof}[Sketch]
+$\Delta_f=\frac1{N_f}\sum_i(1-\pi_r(s_i))=1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$. The gap follows by expanding $\rho_{\mathcal{S}}$ around $\boldsymbol{\pi}_f=\boldsymbol{\pi}_r$ and bounding $|\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle-\|\boldsymbol{\pi}_r\|_2^2|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/M)$.
+\end{proof}
+
+\begin{proposition}[Concentration Bounds]
+\label{prop:pssd_conc}
+Since $\delta(x)\in[0,1]$, Hoeffding gives $|\hat{\Delta}_f-\Delta_f|\le\sqrt{\log(2/\delta)/(2N_f)}$ and $|\hat{\Psi}-\Psi|\le\sqrt{2\log(4/\delta)/N_{\min}}$ with probability $\ge1-\delta$. No sub-Gaussian assumption is required, unlike Proposition~\ref{prop:confidence}.
+\end{proposition}
+
+\begin{proposition}[Per-Sample MHPR Jensen Gap]
+\label{prop:ps_mhpr}
+Define the per-sample state residual $\rho_H(x)\coloneqq\min_{\mathbf{w}}\|\mathbf{e}_{s(x)}-\sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2$ and $\bar{\rho}_H\coloneqq\frac1{N_f}\sum_x\rho_H(x)$. Then $\bar{\rho}_H \ge \|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}}$; in particular $\bar{\rho}_H\ge0$ with equality only when the forget class is state-homogeneous. The gap equals the average within-class state variance of the forget class after projection.
+\end{proposition}
+
+\begin{proof}[Sketch]
+For a fixed subspace $\mathcal{S}_H$, the residual $\|\mathbf{v}-\mathbf{P}_{\mathcal{S}_H}\mathbf{v}\|_2^2$ is a convex quadratic in $\mathbf{v}$. Jensen gives $\frac1{N_f}\sum_x\rho_H(x)\ge\rho_H(\frac1{N_f}\sum_x\mathbf{e}_{s(x)})=\rho_H(\boldsymbol{\pi}_f)$, and $\rho_H(\boldsymbol{\pi}_f)=\min_{\mathbf{w}}\|\boldsymbol{\pi}_f-\sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2=\|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}}$. The exact gap is $\frac1{N_f}\sum_x\|(\mathbf{I}-\mathbf{P}_{\mathcal{S}_H})(\mathbf{e}_{s(x)}-\boldsymbol{\pi}_f)\|_2^2\ge0$, vanishing only when the forget class is state-homogeneous (all samples map to the same state).
+\end{proof}
+
+\begin{theorem}[PSSD-Based MIA]
+\label{thm:pssd_mia}
+The classifier $T_\tau(x)=\mathbf{1}\{\delta(x)\ge\tau\}$ satisfies: (i) $\Psi>0\Rightarrow\mathrm{AUC}>0.5$; (ii) $\mathrm{AUC}\ge1-\frac12\mathrm{H}^2(P_{\delta|f},P_{\delta|r})$ (Hellinger bound); (iii) $|\widehat{\mathrm{AUC}}-\mathrm{AUC}|\le\sqrt{\log(2/\zeta)/(2(N_f+N_r))}$.
+\end{theorem}
+
+\paragraph{State trajectories (extension).}
+For $L$-layer models, each sample has a state trajectory $\mathbf{s}(x)=(s_1,\dots,s_L)$; modeling these as a first-order Markov chain extends PSSD beyond single-layer logits, left to future work. Full proofs are in Appendix~\ref{sec:appendix}.
+
+\subsection{Experimental Results}
+
+We evaluate PSSD on class-level forgetting with $k$-means quantization ($M{=}20$ states, $K{=}3$ held-out). Table~\ref{tab:pssd_results} reports the MPSD $\Delta_f$, excess $\Psi$, and MIA AUC for both $\delta$-based and confidence-based classifiers after 5 gradient ascent steps.
+
+\begin{table}[t]
+\centering
+\small
+\caption{PSSD metrics vs.\ MIA ($M{=}20$, $K{=}3$, 5-step ascent).}\label{tab:pssd_results}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c c}
+\toprule
+Dataset & $\Delta_f$ & $\Psi$ & MIA($\delta$) & MIA(conf.) \\
+\midrule
+MNIST & 0.997 & 0.066 & \textbf{0.990} & 0.570 \\
+Fashion-MNIST & 0.990 & 0.057 & \textbf{0.943} & 0.701 \\
+CIFAR-10 & 0.978 & 0.001 & 0.511 & 0.807 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+$\delta$-based MIA dominates confidence-based MIA on MLP models (Table~\ref{tab:pssd_results}), exploiting logit geometry that remains discriminative even when softmax confidence is random. For CIFAR-10 (CNN), the advantage narrows considerably: $\mathrm{AUC}(\delta){=}0.511$ vs $\mathrm{AUC}(\mathrm{conf.}){=}0.807$, because the CNN's softmax confidence itself provides a strong MIA signal while the excess disparity $\Psi{=}0.001$ is near zero.
+
+\paragraph{Sensitivity to $M$ and quantization.} Across $M{=}20,50,100$ on MNIST, the MPSD is stable ($\Delta_f{=}0.997{\pm}0.002$) and $\delta$-MIA AUC remains $>0.97$, while $\Psi$ decreases from $0.066$ to $0.014$ and $\rho_{\mathcal{S}}$ from $0.176$ to $0.131$, converging toward $\rho_{\mathrm{sm}}{=}0.109$ as the codebook refines (Theorem~\ref{thm:state_bridge}). We recommend $M{=}2C{=}20$ as a default.
+
+%=============================================================================
+\section{State-Space Bridge and Operator-Theoretic Generalization}
+\label{app:bridge}
+%=============================================================================
+
+\subsection{Quantization and Spectrum Bridging}
+
+\begin{lemma}[Quantization Error]
+\label{lem:quantization}
+For $N$ i.i.d. logit vectors $\|z\|_2\le R$, $k$-means with $M$ centers gives quantization error $\mathbb{E}[\|z-\tilde{z}\|_2] \le \tilde{O}(R\sqrt{CM/N}) + O(R\sqrt{\log(1/\zeta)/N})$ with probability $\ge1-\zeta$, where $\tilde{z}$ is the codebook reconstruction. See Appendix~\ref{sec:appendix} for the proof.
+\end{lemma}
+
+\begin{theorem}[Spectrum Bridging: State $\leftrightarrow$ Softmax]
+\label{thm:state_bridge}
+Let $\mathbf{a}_s = \mathbb{E}[\mathbf{p}(x) \mid Q(z(x))=s]$ be the mean softmax within state $s$, and $\mathbf{A} = [\mathbf{a}_1,\dots,\mathbf{a}_M]^\top$ with singular values $\tau_1 \ge \cdots \ge \tau_M > 0$. Let $\mathbf{B}\in\mathbb{R}^{2\times M}$ have rows the forget/retain state-conditional probabilities, so the softmax channel factorizes as $\mathbf{M}_{\mathrm{sm}}=\mathbf{B}\mathbf{A}$. Assume the softmax is $L$-Lipschitz and quantization error $\le \delta_q$ (Lemma~\ref{lem:quantization}). Then
+\begin{equation}
+|\rho_{\mathcal{S}} - \rho_{\mathrm{sm}}| \le 2\Bigl(\frac{\tau_1}{\tau_M}-1\Bigr)\rho_{\mathcal{S}} + O\!\Bigl(\Bigl(\frac{\tau_1}{\tau_M}-1\Bigr)^2 + \frac{L\delta_q}{\|\boldsymbol{\mu}_f\|_2}\Bigr).
+\end{equation}
+If the codebook is well-conditioned ($\tau_1/\tau_M \le 1+\kappa_0$) and $\delta_q$ small, the two RII values are equivalent up to a constant factor. The proof uses the factorization $\mathbf{M}_{\mathrm{sm}}=\mathbf{B}\mathbf{A}$ and bounds the singular values via the right-inverse argument (Appendix~\ref{sec:appendix}).
+\end{theorem}
+
+\begin{theorem}[MHPR Deviation from Softmax RII]
+\label{thm:softmax_deviation}
+Let $\boldsymbol{\mu}_f^*$ be the population mean softmax of the forget class and $\mathbf{H}^* \in \mathbb{R}^{K\times C}$ the matrix of $K$ held-out class population means, with $r=\mathrm{rank}(\mathbf{H}^*)\le K$. Assume the ideal condition $\boldsymbol{\mu}_f^* \in \mathrm{rowspan}(\mathbf{H}^*)$. Let $\hat{\boldsymbol{\mu}}_f$, $\hat{\mathbf{H}}$ be empirical estimates from $N_f$ and $N_{h_1},\dots,N_{h_K}$ samples, $N_{\min} = \min(N_f,N_{h_1},\dots,N_{h_K})$, and $\sigma_{\min}(\mathbf{H}^*)$ the smallest singular value of $\mathbf{H}^*$. Then with probability $\ge 1-\delta$,
+\begin{equation}
+\rho_H \le O\!\left(\frac{r\,\nu^2 C\,\log((K+1)C/\delta)}{\sigma_{\min}^2(\mathbf{H}^*)\|\boldsymbol{\mu}_f^*\|_2^2\,N_{\min}}\right) + O(N_{\min}^{-3/2}).
+\end{equation}
+Consequently, $\rho_H = O(1/N_{\min})$, faster than the $O(1/\sqrt{N})$ rate of the standard RII bound.
+\end{theorem}
+
+\subsection{Operator-Theoretic Generalization}
+
+The discrete $2\times C$ analysis lifts to continuous input/output spaces via Hilbert--Schmidt operator theory, providing the foundation for Theorem~\ref{thm:unified}. Under mild regularity, the conditional density admits the canonical decomposition $f_{Y|X}(y|x)=f_Y(y)+\sum_{k=1}^{\infty}\sigma_k\,\phi_k(y)\,\psi_k(x)$, where $\sigma_1\ge\sigma_2\ge\cdots\ge0$ and $\{\phi_k\},\{\psi_k\}$ are orthonormal bases of $L^2(\mathcal{Y}),L^2(\mathcal{X})$ weighted by $P_Y,P_X$. The first term is the marginal density ($\sigma_1=1$---a normalization of the weighted basis, distinct from the unweighted leading singular value of the discrete channel matrix $\mathbf{M}$, which need not equal $1$). The \textbf{deviation parameter} $\eta^2\coloneqq\sum_{k\ge2}\sigma_k^2$ quantifies the total energy of rank-$\ge2$ components; in the discrete $2\times C$ case $\eta^2=\sigma_2^2$ and $\rho=\eta^2/(\sigma_1^2+\eta^2)$, so $\rho$ is \textbf{monotonic in $\eta^2$}, and $\mathbb{E}_X[\chi^2(P_{Y|X}\|P_Y)]=\eta^2$ establishes $\eta^2$ as both spectral and divergence-theoretic.
+
+%=============================================================================
+\section{Key Proofs and Supplementary Results}
+\label{sec:appendix}
+%=============================================================================
+
+\subsection{Proof of Theorem~\ref{thm:perfect} (Output Distributional Irreversibility)}
+\label{app:perfect}
+\begin{proof}
+We prove both directions.
+
+\noindent\textit{($\Rightarrow$)} $\rho=0 \Rightarrow \sigma_2=0 \Rightarrow \mathbf{M}$ has rank~1. Since both rows are probability vectors summing to one, a rank-one $2\times C$ matrix must have proportional rows: $\boldsymbol{\mu}_f = \lambda \boldsymbol{\mu}_r$ with $\lambda>0$. The sum constraint $\sum_c (\boldsymbol{\mu}_f)_c = \sum_c (\boldsymbol{\mu}_r)_c = 1$ forces $\lambda=1$, hence $\boldsymbol{\mu}_f = \boldsymbol{\mu}_r$. By the law of total probability, $(\boldsymbol{\mu}_f)_c = \frac{1}{N_f}\sum_{x\in D_f}p_c(x) = P(Y{=}c\mid X{=}f)$ and $(\boldsymbol{\mu}_r)_c = P(Y{=}c\mid X{=}r)$, so $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$ implies $P(Y\mid X=1,\theta') = P(Y\mid X=0,\theta')$, i.e., $Y\perp X\mid\theta'$ and $I(X;Y\mid\theta')=0$. No exponential-family or calibration assumption is required: the rows of $\mathbf{M}$ are, by construction, the conditional output distributions of the channel (Remark~\ref{rem:channel}).
+
+\noindent\textit{($\Leftarrow$)} If $I(X;Y\mid\theta')=0$, then $P(Y\mid X{=}f)=P(Y\mid X{=}r)$, i.e., $\boldsymbol{\mu}_f = \boldsymbol{\mu}_r$, hence $\sigma_2=0$ and $\rho=0$.
+\end{proof}
+
+\subsection{Proof of Proposition~\ref{prop:confidence} (Finite-Sample Confidence)}
+\label{app:confidence}
+\begin{proof}
+Under the sub-Gaussian assumption~\cite{vershynin2018high}, each coordinate satisfies
+\begin{equation}
+\mathbb{P}\bigl(|(\hat{\boldsymbol{\mu}}_f)_c-(\boldsymbol{\mu}_f^*)_c|>t\bigr)\le 2\exp(-N_ft^2/2\nu^2),
+\end{equation}
+and a union bound over $C$ coordinates gives $\|\hat{\boldsymbol{\mu}}_f-\boldsymbol{\mu}_f^*\|_2\le\nu\sqrt{2C\log(4C/\delta)/N_f}$ with probability $\ge1-\delta/2$, and likewise for $\hat{\boldsymbol{\mu}}_r$; hence
+\begin{equation}
+\|\hat{\mathbf{M}}-\mathbf{M}^*\|_F\le2\nu\sqrt{C\log(4C/\delta)/N_{\min}}.
+\end{equation}
+By Weyl's theorem, $\|\hat{\boldsymbol{\sigma}}-\boldsymbol{\sigma}^*\|_2\le\|\hat{\mathbf{M}}-\mathbf{M}^*\|_F$. The RII $\rho=f(\sigma_1,\sigma_2)=1-\sigma_1^2/(\sigma_1^2+\sigma_2^2)$ has $\|\nabla f\|_2=\frac{2\sigma_1\sigma_2}{(\sigma_1^2+\sigma_2^2)^{3/2}}\le2/\sigma_1$ (using $\sigma_2\le\sigma_1$), so the mean value theorem yields
+\begin{equation}
+|\hat{\rho}-\rho^*|\le\frac{2}{\sigma_1}\|\hat{\boldsymbol{\sigma}}-\boldsymbol{\sigma}^*\|_2\le\frac{4\nu}{\sigma_1}\sqrt{\frac{C\log(4C/\delta)}{N_{\min}}}.
+\end{equation}
+Setting this $\le\varepsilon$ gives $N_{\min}\ge16C\nu^2\log(4C/\delta)/(\sigma_1^2\varepsilon^2)$.
+\end{proof}
+
+\subsection{Proof of Theorem~\ref{thm:mi_bound} (Spectral MI Bound)}
+\label{app:mi_bound}
+\begin{proof}
+Let $q=P(X{=}f)$, $\bar{q}=1-q$, $P_Y=q\boldsymbol{\mu}_f+\bar{q}\boldsymbol{\mu}_r$, and $\pi_{\min}=\min_y P_r(y)$. In nats, $D_{\mathrm{KL}}\le\chi^2$, so $I(X;Y\mid\theta')\le q\chi^2(\boldsymbol{\mu}_f\|P_Y)+\bar{q}\chi^2(\boldsymbol{\mu}_r\|P_Y)$. Since $P_Y(y)\ge\bar{q}\pi_{\min}$,
+\begin{equation}
+\chi^2(\boldsymbol{\mu}_f\|P_Y)=\sum_y\frac{\bar{q}^2(\mu_f(y)-\mu_r(y))^2}{P_Y(y)}\le\frac{\bar{q}\,\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2}{\pi_{\min}},
+\end{equation}
+and symmetrically $\chi^2(\boldsymbol{\mu}_r\|P_Y)\le q\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2/\pi_{\min}$, so $I\le\frac{2q\bar{q}}{\pi_{\min}}\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2$. Under the equal-norm condition $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$, $\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2=2\sigma_2^2$ (Def.~\ref{def:M}), so $I\le\frac{4q\bar{q}\sigma_2^2}{\pi_{\min}}\le\frac{\sigma_2^2}{\pi_{\min}}=\frac{\sigma_1^2}{\pi_{\min}}\frac{\rho}{1-\rho}\le\frac{2\sigma_1^2}{\pi_{\min}}\frac{\rho}{1-\rho}$. As $\rho\to0$ the equal-norm condition holds asymptotically, so $I=O(\rho)$ without it.
+\end{proof}
+
+\subsection{Proof of Theorem~\ref{thm:finetune} (Fine-Tuning Leakage Bound)}
+\label{app:finetune}
+
+\begin{lemma}[Cross-Covariance Bound]
+\label{lem:cross_cov}
+Assume $\|\mathbf{J}_\theta z_{\theta_0}(x)\|_2 \le J_{\max}$ for all $x$. After one $\lambda$-step, for a well-trained classifier ($\varepsilon=O(\lambda)$), $\|\boldsymbol{\Sigma}_{fr}\|_F = O(\lambda)$.
+\end{lemma}
+\begin{proof}
+For $c_f\neq c_r$, the logit-gradient inner product at $\theta_0$ is $\langle\nabla_z\ell_f,\nabla_z\ell_r\rangle=\langle\mathbf{p}_f,\mathbf{p}_r\rangle-p_f(c_r)-p_r(c_f)=O(\varepsilon)$ (classifier error). After a $\lambda$-step, $\|\Delta z\|_2\le\lambda L\|\mathbf{g}\|_2+O(\lambda^2)$ and softmax $1$-Lipschitz continuity gives $|\langle\nabla_z\ell'_f,\nabla_z\ell'_r\rangle|\le|\langle\nabla_z\ell_f,\nabla_z\ell_r\rangle|+2\|\Delta z\|_2=O(\varepsilon+\lambda)$. Via the chain rule $\nabla_\theta\ell=\mathbf{J}_\theta z^\top\nabla_z\ell$ and $\|\mathbf{J}_\theta z\|_2\le J_{\max}$, the parameter-space covariance inherits this scale: $\|\boldsymbol{\Sigma}_{fr}\|_F=O(\varepsilon+\lambda)=O(\lambda)$ for a well-trained classifier.
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:finetune}]
+With $\mathbf{g}=\nabla_\theta\mathcal{L}(\theta_0,D_f)$ and $\theta'=\theta_0+\lambda\mathbf{g}$, a first-order Taylor expansion gives
+\begin{equation}
+\Delta\boldsymbol{\mu}_f=\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_f=\frac{\lambda}{N_f}\sum_{x\in D_f}\mathbf{J}_{\mathrm{softmax}}(f_{\theta_0}(x))\mathbf{J}_\theta f_{\theta_0}(x)\mathbf{g}+O(\lambda^2),
+\end{equation}
+and $\|\Delta\boldsymbol{\mu}_r\|_2\le\lambda L\|\mathbf{g}\|_2$ for retain samples (uniform softmax Jacobian bound). The squared displacement satisfies $\|\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_r'\|_2^2\le\|\Delta\boldsymbol{\mu}_f\|_2^2+\|\Delta\boldsymbol{\mu}_r\|_2^2+2\|\Delta\boldsymbol{\mu}_f\|_2\|\Delta\boldsymbol{\mu}_r\|_2$ (the first-order cross term with $\boldsymbol{\mu}_f-\boldsymbol{\mu}_r$ vanishes by symmetry of the balanced retain set). With $\|\Delta\boldsymbol{\mu}_f\|_2\le\lambda L\sqrt{\mathrm{Tr}(\boldsymbol{\Sigma}_f)}$,
+\begin{equation}
+\|\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_r'\|_2^2\le\lambda^2L^2\mathrm{Tr}(\boldsymbol{\Sigma}_f)+O(\lambda^3).
+\end{equation}
+Using $\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2=\sqrt{2}\sigma_2$ and $\rho\approx\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2/(2\sigma_1^2)$ for $\rho\ll1$ yields $\rho(\theta')\le\frac{\lambda^2L^2}{2\sigma_1^2}\mathrm{Tr}(\boldsymbol{\Sigma}_f)+O(\lambda^3)$. For class-level forgetting the cross-term $\mathbb{E}[\langle\Delta\boldsymbol{\mu}_f,\Delta\boldsymbol{\mu}_r\rangle]=\lambda^2\mathrm{Tr}(\boldsymbol{\Sigma}_{fr})+O(\lambda^3)$ is $O(\lambda^3)$ by Lemma~\ref{lem:cross_cov}, preserving the $O(\lambda^2)$ rate.
+\end{proof}
+
+\subsection{Proof Sketch of Theorem~\ref{thm:unified} (Unified Decomposition)}
+\label{app:unified}
+\begin{proof}
+By the chain rule, $I(X;R) \le I(X;Y) + I(X;R\mid Y)$. For the cover term, the Hilbert--Schmidt decomposition $f_{Y|X}(y|x) = f_Y(y) + \sum_{k\ge 2}\sigma_k\phi_k(y)\psi_k(x)$ yields $\mathbb{E}_X[\chi^2(P_{Y|X}\|P_Y)] = \sum_{k\ge 2}\sigma_k^2 = \eta^2$ via orthonormality of $\{\phi_k\},\{\psi_k\}$. Since $D_{\mathrm{KL}} \le \chi^2$, we have $I(X;Y) \le \eta^2$. For the direct term, conditioned on $Y=y$, $R = \alpha X + \beta y + N$. By Lemma~\ref{lem:fisher} (Fisher information expansion), $I(X;R\mid Y) = \frac{\alpha^2}{2\sigma^2}\operatorname{Var}(X) + o(\alpha^2)$. Summing yields the decomposition.
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:state_bridge}]
+From $\mathbf{M}_{\mathrm{sm}} = \mathbf{B}\mathbf{A}$, the variational characterization of singular values gives $\sigma_i(\mathbf{B}\mathbf{A}) \le \tau_1\sigma_i(\mathbf{B})$ and $\sigma_i(\mathbf{B}\mathbf{A}) \ge \tau_M\sigma_i(\mathbf{B})$ using the right inverse $\mathbf{A}^+$. Thus $\frac{\tau_M}{\tau_1}\epsilon \le \tilde{\epsilon} \le \frac{\tau_1}{\tau_M}\epsilon$ where $\epsilon=\sigma_2/\sigma_1$, yielding $|\rho_{\mathrm{sm}}-\rho_{\mathcal{S}}| \le 2(\tau_1/\tau_M-1)\rho_{\mathcal{S}} + O((\tau_1/\tau_M-1)^2)$. The $L\delta_q/\|\boldsymbol{\mu}_f\|_2$ term accounts for within-state variance of $\mathbf{a}_s$.
+\end{proof}
+
+\subsection{Bridge and $\chi^2$ Control Proofs}
+\label{app:bridge_proofs}
+
+\begin{proof}[Proof of Theorem~\ref{thm:state_mhpr}]
+$\rho_{H,\mathcal{S}} = \min_{\mathbf{w}} \|\boldsymbol{\pi}_f - \sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2 / \|\boldsymbol{\pi}_f\|_2^2 \le \|\boldsymbol{\pi}_f - \bar{\boldsymbol{\pi}}_H\|_2^2 / \|\boldsymbol{\pi}_f\|_2^2$. Since $1/\bar{\pi}_H(m) \ge 1$, we have $\|\boldsymbol{\pi}_f - \bar{\boldsymbol{\pi}}_H\|_2^2 \le \chi^2(\boldsymbol{\pi}_f\|\bar{\boldsymbol{\pi}}_H)$. With $\|\boldsymbol{\pi}_f\|_2^2 \ge \gamma$ and $\chi^2 \le \eta^2$, we obtain $\rho_{H,\mathcal{S}} \le \eta^2/\gamma$.
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:softmax_deviation}]
+Decompose $\|\hat{\boldsymbol{\mu}}_f - \mathbf{P}_{\hat{\mathbf{H}}}\hat{\boldsymbol{\mu}}_f\|_2 \le \|(\mathbf{I} - \mathbf{P}_{\mathbf{H}^*})\hat{\boldsymbol{\mu}}_f\|_2 + \|(\mathbf{P}_{\mathbf{H}^*} - \mathbf{P}_{\hat{\mathbf{H}}})\hat{\boldsymbol{\mu}}_f\|_2$. Under $\boldsymbol{\mu}_f^* \in \mathrm{rowspan}(\mathbf{H}^*)$, the first term reduces to $\|\hat{\boldsymbol{\mu}}_f - \boldsymbol{\mu}_f^*\|_2$. For the second, by subspace perturbation theory~\cite{stewart1990matrix}, when $\|\hat{\mathbf{H}}-\mathbf{H}^*\|_2 \le \sigma_{\min}(\mathbf{H}^*)/2$, $\|\mathbf{P}_{\hat{\mathbf{H}}} - \mathbf{P}_{\mathbf{H}^*}\|_2 \le \frac{2\sqrt{r}}{\sigma_{\min}(\mathbf{H}^*)}\|\hat{\mathbf{H}}-\mathbf{H}^*\|_2$. Both error terms are bounded by $2\nu\sqrt{C\log(2(K+1)C/\delta)/N_{\min}}$ via Hoeffding. Substituting and applying the delta method yields $\rho_H = O(1/N_{\min})$.
+\end{proof}
+
+\subsection{Proof of Lemma~\ref{lem:fisher} (Fisher Information Expansion)}
+\label{app:fisher}
+\begin{proof}
+For binary $X\in\{0,1\}$ with $P(X{=}1)=q$, $f_R(r)=f_Z(r)-q\alpha f_Z'(r)+\frac{q\alpha^2}{2}f_Z''(r)+o(\alpha^2)$. Let $\delta f=f_R-f_Z$. The entropy perturbation of $f_Z+\delta f$ is
+\begin{equation}
+H(f_Z+\delta f)=H(f_Z)-\int\delta f\,\log f_Z-\frac12\int\frac{(\delta f)^2}{f_Z}+o(\|\delta f\|^2),
+\end{equation}
+where $\int\delta f=0$ by mass conservation. The $O(\alpha)$ term vanishes because $\int f_Z'\log f_Z=[f_Z\log f_Z]-\int f_Z'=0$; integrating by parts, $\int f_Z''\log f_Z=-\int(f_Z')^2/f_Z=-J(Z)$. The quadratic term contributes $-\frac{q^2\alpha^2}{2}J(Z)$. Hence
+\begin{equation}
+H(R)-H(Z)=\frac{q(1-q)\alpha^2}{2}J(Z)+o(\alpha^2)=\frac{\alpha^2}{2}\mathrm{Var}(X)J(Z)+o(\alpha^2).
+\end{equation}
+Since $H(R|X)=H(Z)$, $I(X;R)=H(R)-H(R|X)=\frac{\alpha^2}{2}\mathrm{Var}(X)J(Z)+o(\alpha^2)$; for Gaussian noise $J(N)=1/\sigma^2$.
+\end{proof}
+
+\subsection{MHPR Theoretical Guarantees}
+\label{app:mhpr}
+
+Let $\boldsymbol{\mu}_f \in \mathbb{R}^C$ be the mean softmax vector of the forgotten class, and $\mathbf{H}_K \in \mathbb{R}^{K\times C}$ the matrix of $K$ held-out class means. Denote $\mathcal{S}_K = \mathrm{rowspan}(\mathbf{H}_K)$, with $\mathbf{P}_{\mathcal{S}_K}$ the orthogonal projector.
+
+\begin{proposition}[Monotonic Improvement with $K$]
+\label{prop:mhpr_monotone}
+For $K_1 \le K_2$, $\rho_H(K_2) \le \rho_H(K_1)$.
+\end{proposition}
+\begin{proof}
+Since $\mathcal{S}_{K_1} \subseteq \mathcal{S}_{K_2}$, the orthogonal projection satisfies $\mathbf{P}_{\mathcal{S}_{K_2}} = \mathbf{P}_{\mathcal{S}_{K_1}} + \mathbf{P}_{\mathcal{S}_{K_2} \cap \mathcal{S}_{K_1}^\perp}$. The Pythagorean theorem gives $\|\boldsymbol{\mu}_f - \mathbf{P}_{\mathcal{S}_{K_2}}\boldsymbol{\mu}_f\|_2^2 = \|\boldsymbol{\mu}_f - \mathbf{P}_{\mathcal{S}_{K_1}}\boldsymbol{\mu}_f\|_2^2 - \|\mathbf{P}_{\mathcal{S}_{K_2} \cap \mathcal{S}_{K_1}^\perp}\boldsymbol{\mu}_f\|_2^2 \le \|\boldsymbol{\mu}_f - \mathbf{P}_{\mathcal{S}_{K_1}}\boldsymbol{\mu}_f\|_2^2$.
+\end{proof}
+
+\begin{proposition}[Bias--Variance Decomposition]
+\label{prop:mhpr_bias}
+Under $\mathcal{H}_0$ ($\boldsymbol{\mu}_f^* \in \mathcal{S}_K^*$), $\mathbb{E}[\rho_{\mathrm{est}}] = O(C/N_{\min})$.
+\end{proposition}
+\begin{proof}
+Under $\mathcal{H}_0$ ($\boldsymbol{\mu}_f^*=\mathbf{P}_{\mathcal{S}_K^*}\boldsymbol{\mu}_f^*$), the numerator expands to $\|(\mathbf{I}-\mathbf{P}_{\mathcal{S}_K^*})\boldsymbol{\delta}_f-\Delta_H\boldsymbol{\mu}_f^*-\Delta_H\boldsymbol{\delta}_f\|_2^2$ with $\boldsymbol{\delta}_f=\hat{\boldsymbol{\mu}}_f-\boldsymbol{\mu}_f^*$ and $\Delta_H=\mathbf{P}_{\mathcal{S}_K}-\mathbf{P}_{\mathcal{S}_K^*}$. Standard bounds give $\|\boldsymbol{\delta}_f\|_2=O_p(\sqrt{C/N_f})$ and $\|\Delta_H\|_2=O_p(\sqrt{CK/N_{\min}})$ via sub-Gaussian concentration and subspace perturbation~\cite{stewart1990matrix}; the denominator converges at rate $O_p(1/\sqrt{N_f})$. The delta method yields $\mathbb{E}[\rho_{\mathrm{est}}]=O(CK/N_{\min})$, which is $O(C/N_{\min})$ for $K=O(1)$.
+\end{proof}
+
+\begin{proposition}[Finite-Sample Bound]
+\label{prop:mhpr_confidence}
+For sub-Gaussian softmax vectors with variance proxy $\nu^2$ and $\sigma_{\min}(\mathbf{H}^*)>0$,
+\begin{equation}
+|\hat{\rho}_H - \rho_H^*| \le \frac{4\nu}{\|\boldsymbol{\mu}_f^*\|_2}\left(2+\frac{\sqrt{K}\,\|\boldsymbol{\mu}_f^*\|_2}{\sigma_{\min}(\mathbf{H}^*)}\right)\sqrt{\frac{C(K+1)\log(2(K+1)C/\delta)}{N_{\min}}}
+\end{equation}
+with probability $\ge 1-\delta$.
+\end{proposition}
+\begin{proof}
+Let $\hat{\mathbf{z}}=(\hat{\boldsymbol{\mu}}_f,\hat{\boldsymbol{\mu}}_{h_1},\dots,\hat{\boldsymbol{\mu}}_{h_K})$. For the forget direction, $\|\nabla_{\boldsymbol{\mu}_f}\phi\|_2\le4/\|\boldsymbol{\mu}_f\|_2$ (from $\nabla\phi=2(\mathbf{I}-\mathbf{P}_{\mathcal{S}_K})\boldsymbol{\mu}_f/\|\boldsymbol{\mu}_f\|_2^2-2\phi\boldsymbol{\mu}_f/\|\boldsymbol{\mu}_f\|_2^2$); for each held-out direction, Davis--Kahan~\cite{stewart1990matrix} gives $\|\nabla_{\boldsymbol{\mu}_{h_k}}\phi\|_2\le2/\sigma_{\min}(\mathbf{H}^*)$. With $\|\hat{\boldsymbol{\mu}}_f\|_2\ge\|\boldsymbol{\mu}_f^*\|_2/2$ (large $N_f$), the combined Lipschitz constant is $L=\frac{4}{\|\boldsymbol{\mu}_f^*\|_2}(2+\frac{\sqrt{K}\|\boldsymbol{\mu}_f^*\|_2}{\sigma_{\min}(\mathbf{H}^*)})$. Hoeffding with a union bound over $(K+1)C$ entries gives $\|\hat{\mathbf{z}}-\mathbf{z}^*\|_\infty\le2\nu\sqrt{\log(2(K+1)C/\delta)/N_{\min}}$ w.h.p., so $|\hat{\rho}_H-\rho_H^*|\le L\sqrt{(K+1)C}\|\hat{\mathbf{z}}-\mathbf{z}^*\|_\infty$.
+\end{proof}
+
+\subsection{State-Space MHPR Bound Validation}
+\label{app:chi2}
+
+We validate Theorem~\ref{thm:state_mhpr} on the MNIST class-5 setup ($M=20$ states, $K=3$ held-out). The bound $\rho_{H,\mathcal{S}} \le \chi^2/\|\boldsymbol{\pi}_f\|_2^2$ holds for \emph{every} gradient step (Table~\ref{tab:chi2}); both $\rho_{H,\mathcal{S}}$ and $\chi^2$ grow monotonically with forgetting strength, and the bound is conservative (ratio $\sim5\times10^2$--$2\times10^3$), as expected for a worst-case inequality.
+
+\begin{table}[t]
+\centering
+\small
+\caption{State-space MHPR bound validation (MNIST, $M{=}20$, $K{=}3$).}\label{tab:chi2}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{l c c c}
+\toprule
+Steps & $\rho_{H,\mathcal{S}}$ & $\chi^2$ & $\chi^2/\|\boldsymbol{\pi}_f\|_2^2$ \\
+\midrule
+0     & 0.999758 & 272.7 & $5.20\times 10^2$ \\
+1     & 0.999758 & 273.0 & $5.20\times 10^2$ \\
+3     & 0.999758 & 279.0 & $5.30\times 10^2$ \\
+5     & 0.999753 & 279.1 & $5.30\times 10^2$ \\
+10    & 0.999752 & 302.3 & $5.75\times 10^2$ \\
+20    & 0.999746 & 346.2 & $6.50\times 10^2$ \\
+50    & 0.999613 & 558.4 & $1.04\times 10^3$ \\
+100   & 0.998588 & 1095.8 & $2.04\times 10^3$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{PSSD Proofs}
+
+\begin{proof}[Proof of Proposition~\ref{prop:pssd_rii}]
+$\Delta_f = \frac1{N_f}\sum_{x\in D_f}(1-\pi_r(s(x))) = 1-\sum_s\pi_f(s)\pi_r(s)=1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$. For the gap, when $\|\boldsymbol{\pi}_f\|_2=\|\boldsymbol{\pi}_r\|_2=s$, the state-space RII is $\rho_{\mathcal{S}}=\frac{s-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{2s}$. Expanding around $\boldsymbol{\pi}_f=\boldsymbol{\pi}_r$ gives $|\Delta_f-\rho_{\mathcal{S}}|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/M)+O(\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_2^2)$, where the $\ell_1$ term dominates via $|\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle-\|\boldsymbol{\pi}_r\|_2^2|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1\|\boldsymbol{\pi}_r\|_\infty\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/M)$.
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{prop:pssd_conc}]
+Each $\delta(x_i)\in[0,1]$ is a bounded random variable. Hoeffding gives $\mathbb{P}(|\hat{\Delta}_f-\Delta_f|\ge\varepsilon) \le 2\exp(-2N_f\varepsilon^2)$. For $\hat{\Psi}=\hat{\Delta}_f-\hat{\Delta}_r$, the two-sample Hoeffding bound gives $\mathbb{P}(|\hat{\Psi}-\Psi|\ge\varepsilon) \le 4\exp(-N_{\min}\varepsilon^2/2)$. For top-$k$, Bonferroni yields $\mathbb{P}(|\hat{\Delta}_{(k)}-\Delta_{(k)}|\ge\varepsilon) \le 2k\exp(-2N_f\varepsilon^2/k^2)$. Solving for $\varepsilon$ at confidence $1-\delta$ gives the stated rates. Unlike Proposition~\ref{prop:confidence}, no sub-Gaussian assumption is required.
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{prop:ps_mhpr}]
+For a fixed subspace $\mathcal{S}_H$, the residual $\|\mathbf{v}-\mathbf{P}_{\mathcal{S}_H}\mathbf{v}\|_2^2$ is a convex quadratic in $\mathbf{v}$. Jensen gives
+\[
+\frac1{N_f}\sum_{x\in D_f}\rho_H(x) \ge \rho_H\!\left(\frac1{N_f}\sum_{x\in D_f}\mathbf{e}_{s(x)}\right) = \rho_H(\boldsymbol{\pi}_f) = \|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}},
+\]
+since $\rho_H(\boldsymbol{\pi}_f)=\min_{\mathbf{w}}\|\boldsymbol{\pi}_f-\sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2=\|\boldsymbol{\pi}_f\|_2^2\rho_{H,\mathcal{S}}$. The exact gap is $\frac1{N_f}\sum_x\|(\mathbf{I}-\mathbf{P}_{\mathcal{S}_H})(\mathbf{e}_{s(x)}-\boldsymbol{\pi}_f)\|_2^2\ge0$, vanishing only when the forget class is state-homogeneous ($\boldsymbol{\pi}_f$ is a Kronecker delta).
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:pssd_mia}]
+(i) If $\Psi>0$, the forget-side mean of $\delta$ exceeds the retain-side mean; the Bayes-optimal test is a likelihood-ratio test, so some threshold achieves $\mathrm{TPR}>\mathrm{FPR}$, i.e., $\mathrm{AUC}>0.5$.
+
+(ii) Le Cam--Bregman gives $\mathrm{TV}\le\mathrm{H}$ for $P_{\delta|f},P_{\delta|r}$, and $\mathrm{AUC}\ge1-\mathrm{TV}/2$ for threshold classifiers, yielding the Hellinger bound.
+
+(iii) AUC is a $U$-statistic with bounded kernel, so Hoeffding gives $|\widehat{\mathrm{AUC}}-\mathrm{AUC}|\le\sqrt{\log(2/\zeta)/(2(N_f+N_r))}$.
+
+The empirical advantage over softmax-based MIA (Table~\ref{tab:pssd_results}) follows because $\delta(x)$ depends on logit geometry via $\pi_r(Q(z(x)))$, which stays discriminative when softmax probabilities are diffuse.
+\end{proof}
+
+\subsection{Proof of Lemma~\ref{lem:quantization} (Quantization Error Bound)}
+\begin{proof}
+For i.i.d.\ $\|z\|_2\le R$ with optimal $M$-center distortion $D^*=\mathbb{E}[\min_{c\in\mathcal{C}^*}\|z-c\|_2^2]$, standard covering-number arguments for $k$-means \cite{kumar2010clustering} give excess distortion $D(\hat{\mathcal{C}})-D^*=O(R^2\sqrt{CM/N})$ w.h.p. Since $\mathbb{E}[\|z-\tilde{z}\|_2]\le\sqrt{D(\hat{\mathcal{C}})}$ and $D^*\le R^2$, taking square roots yields $\tilde{O}(R\sqrt{CM/N})$; the $O(R\sqrt{\log(1/\zeta)/N})$ tail bound follows from a union bound over the empirical distortion estimate.
+\end{proof}
+
+\subsection{Temperature Scaling Information Preservation}
+\label{app:temp}
+\begin{proposition}[Ranking Preservation]
+\label{prop:rank_preserve}
+Let $\theta_1',\theta_2'$ be parameter states and $\rho_T(\theta')$ the RII at temperature $T$ for $\mathbf{p}_T(x)=\mathrm{Softmax}(f(x)/T)$. If $\rho_1(\theta_1') \le \rho_1(\theta_2')$, there exists $T_0\ge1$ such that $\rho_T(\theta_1') \le \rho_T(\theta_2')$ for all $T\ge T_0$, provided retained class means remain well-conditioned.
+\end{proposition}
+\begin{proof}
+As $T\to\infty$, $\mathbf{p}_T\to\mathbf{1}/C$ and $\rho_T\to0$; the convergence rate is governed by $\|\boldsymbol{\mu}_f^{(T)}-\boldsymbol{\mu}_r^{(T)}\|_2\propto T^{-1}\|\boldsymbol{\mu}_f^{(1)}-\boldsymbol{\mu}_r^{(1)}\|_2$. Since the $T=1$ ordering is strict, the multiplicative scaling preserves it for all sufficiently large $T$.
+\end{proof}
+
+%=============================================================================
+% REFERENCES
+%=============================================================================
+\begin{thebibliography}{99}
+\bibitem{bourtoule2021machine}
+Bourtoule L, Chandrasekaran V, Choquette-Choo C A, et al (2021) Machine unlearning. In: 2021 IEEE Symposium on Security and Privacy (SP), IEEE
+
+\bibitem{nguyen2025survey}
+Nguyen T T, Huynh T T, Ren Z, et al (2025) A survey of machine unlearning. ACM Transactions on Intelligent Systems and Technology 16(5):1-46
+
+\bibitem{cosma2026ruler}
+Cosma G, Finke A (2026) RULER: representation-level verification of machine unlearning. arXiv:2605.27569
+
+\bibitem{yong2026erased}
+Yong T P Y, Ong W K, Chan C S (2026) Erased, but not gone: output forgetting is not true forgetting. arXiv:2606.25001
+
+\bibitem{sanh2020distilbert}
+Sanh V, Debut L, Chaumond J, Wolf T (2019) DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter. arXiv:1910.01108
+
+\bibitem{qwen2024qwen2}
+Qwen Team (2024) Qwen2.5 technical report. arXiv:2412.15115
+
+\bibitem{maini2024tofu}
+Maini P, Feng Z, Schwarzschild A, Lipton Z C, Kolter J Z (2024) TOFU: a task of fictitious unlearning for LLMs. In: Proceedings of the First Conference on Language Modeling (COLM)
+
+\bibitem{shokri2017membership}
+Shokri R, Stronati M, Song C, Shmatikov V (2017) Membership inference attacks against machine learning models. In: 2017 IEEE Symposium on Security and Privacy (SP), IEEE
+
+\bibitem{guo2020certified}
+Guo C, Goldstein T, Hannun A, van der Maaten L (2020) Certified data removal from machine learning models. In: Proceedings of the 37th International Conference on Machine Learning (ICML), PMLR
+
+\bibitem{sommer2022towards}
+Sommer D M, Song L, Wagh S, Mittal P (2022) Athena: probabilistic verification of machine unlearning. Proceedings on Privacy Enhancing Technologies 2022(3):268-290
+
+\bibitem{ye2026auditing}
+Ye D, Zhu T, Huang R, et al (2026) Auditing machine unlearning: a systematic research on whether models truly forget. arXiv:2606.16110
+
+\bibitem{cao2015towards}
+Cao Y, Yang J (2015) Towards making systems forget with machine unlearning. In: 2015 IEEE Symposium on Security and Privacy (SP), IEEE
+
+\bibitem{golatkar2020eternal}
+Golatkar A, Achille A, Soatto S (2020) Eternal sunshine of the spotless net: selective forgetting in deep networks. In: 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), IEEE
+
+\bibitem{ginart2019making}
+Ginart A, Guan M Y, Valiant G, Zou J (2019) Making AI forget you: data deletion in machine learning. In: Advances in Neural Information Processing Systems 32 (NeurIPS)
+
+\bibitem{sekhari2021remember}
+Sekhari A, Acharya J, Kamath G, Suresh A T (2021) Remember what you want to forget: algorithms for machine unlearning. In: Advances in Neural Information Processing Systems 34 (NeurIPS)
+
+\bibitem{carlini2022membership}
+Carlini N, Chien S, Nasr M, et al (2022) Membership inference attacks from first principles. In: 2022 IEEE Symposium on Security and Privacy (SP), IEEE
+
+\bibitem{zhang2024fragile}
+Zhang B, Chen Z, Shen C, Li J (2024) Verification of machine unlearning is fragile. In: Proceedings of the 41st International Conference on Machine Learning (ICML), PMLR
+
+\bibitem{zheng2026bias}
+Zheng W, Chen K, Guo Y, Xiao Y (2026) Classification-head bias in class-level machine unlearning: diagnosis, mitigation, and evaluation. arXiv:2605.08730
+
+\bibitem{xue2025verification}
+Xue L, Hu S, Lu W, et al (2026) Towards reliable forgetting: a survey on machine unlearning verification. ACM Computing Surveys (accepted); arXiv:2506.15115
+
+\bibitem{shannon1949communication}
+Shannon C E (1949) Communication theory of secrecy systems. Bell System Technical Journal 28(4):656-715
+
+\bibitem{bloch2021overview}
+Bloch M, G\"unl\"u O, Yener A, et al (2021) An overview of information-theoretic security and privacy: metrics, limits and applications. IEEE Journal on Selected Areas in Information Theory 2(1)
+
+\bibitem{li2024muse}
+Shi W, Lee J, Huang Y, et al (2024) MUSE: machine unlearning six-way evaluation for language models. arXiv:2407.06460
+
+\bibitem{vershynin2018high}
+Vershynin R (2018) High-Dimensional Probability: An Introduction with Applications in Data Science. Cambridge University Press, Cambridge
+
+\bibitem{stewart1990matrix}
+Stewart G W, Sun J (1990) Matrix Perturbation Theory. Academic Press, Boston
+
+\bibitem{kumar2010clustering}
+Kumar A, Kannan R (2010) Clustering with spectral norm and the k-means algorithm. In: 2010 IEEE 51st Annual Symposium on Foundations of Computer Science (FOCS), IEEE
+\end{thebibliography}
+
+\end{document}

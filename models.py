@@ -186,6 +186,8 @@ def get_model(dataset: str, device: torch.device, model_name: str = "mlp") -> nn
         if model_cls in (SmallCNN, ResNet18CIFAR):
             raise ValueError(f"{model_name} not supported for MNIST. Use mlp or mlp3.")
         model = model_cls(input_dim=784, num_classes=10)
+    elif dataset == "fashion_mnist":
+        model = model_cls(input_dim=784, num_classes=10)
     elif dataset == "cifar10":
         model = model_cls(num_classes=10)
     elif dataset == "cifar100":

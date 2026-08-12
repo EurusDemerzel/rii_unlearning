@@ -4,10 +4,10 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
 
-Official implementation of the **Residual Information Index (RII)** — a spectral framework for quantifying output-space irreversibility in machine unlearning.
+Official implementation of the **Residual Irreversibility Index (RII)** — a spectral certificate for quantifying output-space irreversibility in class-level machine unlearning.
 
-**Paper**: *"A Spectral Framework for Output-Space Irreversibility in Machine Unlearning"*  
-**Submitted to**: IEEE Transactions on Information Forensics and Security (TIFS)
+**Paper**: *"RII: A Spectral Certificate for Verifying Class-Level Machine Unlearning"*  
+**Submitted to**: Applied Intelligence (Springer)
 
 **Code**: [GitHub](https://github.com/EurusDemerzel/rii_unlearning) | [Gitee](https://gitee.com/peregrine_eurus/rii_unlearning)
 
@@ -151,9 +151,9 @@ If you use this code in your research, please cite our paper:
 
 ```bibtex
 @article{zhang2026spectral,
-  title={A Spectral Framework for Output-Space Irreversibility in Machine Unlearning},
+  title={RII: A Spectral Certificate for Verifying Class-Level Machine Unlearning},
   author={Zhang, Yan and Lu, Chenggang},
-  journal={IEEE Transactions on Information Forensics and Security},
+  journal={Applied Intelligence},
   year={2026},
   note={Submitted}
 }
