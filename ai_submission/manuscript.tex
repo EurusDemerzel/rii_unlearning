@@ -68,7 +68,7 @@ The $2\times C$ \textbf{empirical output channel matrix} $\mathbf{M}(\theta')$ h
 \item \textbf{We prove} (Theorem~\ref{thm:perfect}) that $\rho=0$ iff $I(X;Y\mid\theta')=0$ via a channel-level argument that requires no exponential-family or calibration assumptions.
 \item \textbf{We design} MHPR (Sec.~\ref{sec:mhpr}) for class-level forgetting: a multi-held-out projection that largely resolves the known/unknown class asymmetry (reducing the oracle's residual well below its standard-RII level), with temperature scaling and finite-sample guarantees.
 \item \textbf{We establish} (Sec.~\ref{sec:theory}) confidence bounds, an $O(\lambda^2)$ fine-tuning leakage bound, a spectral MI bound, and a unified decomposition of output leakage into two orthogonal axes.
-\item \textbf{We evaluate} RII and MHPR on a unified seven-method benchmark and on the TOFU benchmark with a 7B-parameter language model (Sec.~\ref{sec:experiments}), exposing hidden failures (gradient-ascent signature strengthening and fine-tune rebound) that accuracy and MIA miss; on TOFU, where all unlearned methods saturate at 100\% generation accuracy, RII is the only metric that separates retraining from no unlearning. We also give an $O(CN)$ audit protocol and a per-sample extension (PSSD, Appendix~\ref{app:pssd}).
+\item \textbf{We evaluate} RII and MHPR on a unified seven-method benchmark and on the TOFU benchmark with a 7B-parameter language model (Sec.~\ref{sec:experiments}), exposing hidden failures (gradient-ascent signature strengthening and fine-tune rebound) that accuracy and MIA miss; on TOFU, where all unlearned methods saturate at 100\% generation accuracy, RII is the only metric that separates retraining from no unlearning. We also give an $O(CN)$ audit protocol and a per-sample extension, Per-Sample State Disparity (PSSD; Appendix~\ref{app:pssd}).
 \end{enumerate}
 
 %=============================================================================
@@ -161,16 +161,16 @@ A simple remedy is temperature scaling: $\mathbf{p}_T(x) = \mathrm{Softmax}(f_{\
 \subsection{Bridging Logit-State and Softmax RII}
 \label{sec:logit_bridge}
 
-Quantizing logits into $M$ states ($k$-means on training logits) yields state distributions $\boldsymbol{\pi}_c\in\Delta^{M-1}$; the state-space RII $\rho_{\mathcal{S}}$ approximates the softmax RII (Theorem~\ref{thm:state_bridge}, Appendix~\ref{app:bridge}). In state space, MHPR admits a clean $\chi^2$ bound:
+Quantizing logits into $m$ states ($k$-means on training logits) yields state distributions $\boldsymbol{\pi}_c\in\Delta^{m-1}$. Throughout, $\chi^2(P\|Q)\coloneqq\sum_i (P_i-Q_i)^2/Q_i$ denotes the $\chi^2$ divergence. The state-space RII $\rho_{\mathcal{S}}$ approximates the softmax RII (Theorem~\ref{thm:state_bridge}, Appendix~\ref{app:bridge}); in state space, MHPR admits a clean $\chi^2$ bound:
 
 \begin{theorem}[State-Space MHPR via $\chi^2$ Control]
 \label{thm:state_mhpr}
-Let $\boldsymbol{\pi}_f$ be the forget state distribution and $\bar{\boldsymbol{\pi}}_H = \frac{1}{K}\sum_k \boldsymbol{\pi}_{h_k}$. If $\chi^2(\boldsymbol{\pi}_f \| \bar{\boldsymbol{\pi}}_H) \le \eta^2$ and $\|\boldsymbol{\pi}_f\|_2^2 \ge \gamma > 0$, then
+Let $\boldsymbol{\pi}_f$ be the forget state distribution and $\bar{\boldsymbol{\pi}}_H = \frac{1}{K}\sum_k \boldsymbol{\pi}_{h_k}$. If $\chi^2(\boldsymbol{\pi}_f \| \bar{\boldsymbol{\pi}}_H) \le \tau^2$ and $\|\boldsymbol{\pi}_f\|_2^2 \ge \gamma > 0$, then
 \begin{equation}
-\rho_{H,\mathcal{S}} \le \frac{\eta^2}{\gamma}.
+\rho_{H,\mathcal{S}} \le \frac{\tau^2}{\gamma}.
 \label{eq:state_mhpr}
 \end{equation}
-Thus MHPR is a consistent proxy for output-level indistinguishability in state space. The bound uses $\chi^2(P\|Q) \coloneqq \sum_i (P_i-Q_i)^2/Q_i$ (the standard definition without the factor $1/2$).
+Thus MHPR is a consistent proxy for output-level indistinguishability in state space.
 \end{theorem}
 
 Empirical validation (Appendix~\ref{app:chi2}) confirms the bound of Eq.~\eqref{eq:state_mhpr}, i.e., $\rho_{H,\mathcal{S}} \le \chi^2/\|\boldsymbol{\pi}_f\|_2^2$, for all gradient-ascent steps. Additional state-space results (quantization error, Lemma~\ref{lem:quantization}; spectrum bridge, Theorem~\ref{thm:state_bridge}; MHPR deviation rate, Theorem~\ref{thm:softmax_deviation}) are deferred to Appendix~\ref{app:bridge}.
@@ -231,9 +231,9 @@ Consequently, the class-level bound preserves the $O(\lambda^2)$ rate of Eq.~\eq
 \label{thm:mi_bound}
 For binary membership $X$ and predicted class $Y$ under $\theta'$, when the channel rows have equal norm, $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$ (a condition relaxed asymptotically below),
 \begin{equation}
-I(X; Y \mid \theta') \le \frac{2\sigma_1^2}{\pi_{\min}}\cdot\frac{\rho}{1-\rho},
+I(X; Y \mid \theta') \le \frac{\sigma_1^2}{\pi_{\min}}\cdot\frac{\rho}{1-\rho},
 \end{equation}
-where $\pi_{\min} \coloneqq \min_y P_r(y) > 0$ and $P_r(y)=P(Y{=}y\mid X{=}r)$. For $\rho\ll 1$, $I \le O(\rho)$; the bound vanishes as $\rho\to0$, and holds asymptotically without the equal-norm condition (proof in Appendix~\ref{sec:appendix}).
+where $\pi_{\min} \coloneqq \min_y (\boldsymbol{\mu}_r)_y > 0$ and $(\boldsymbol{\mu}_r)_y=P(Y{=}y\mid X{=}r)$. For $\rho\ll 1$, $I \le O(\rho)$; the bound vanishes as $\rho\to0$, and holds asymptotically without the equal-norm condition (proof in Appendix~\ref{sec:appendix}).
 \end{theorem}
 
 \paragraph{Signal model.}
@@ -241,7 +241,7 @@ We model the observed post-removal output as $R = \alpha X + \beta Y + N$, $N \s
 
 \begin{lemma}[Small-$\alpha$ Fisher Information Expansion]
 \label{lem:fisher}
-For $R = \alpha X + Z$ with $X \perp Z$, as $\alpha \to 0$:
+Assume $f_Z\in C^2$ and that $f_Z$ and its derivatives vanish sufficiently fast at infinity for the integration by parts below. For $R = \alpha X + Z$ with $X \perp Z$, as $\alpha \to 0$:
 $I(X;R) = \frac{\alpha^2}{2}\mathrm{Var}(X)J(Z) + o(\alpha^2)$, where $J(Z)$ is the Fisher information of $Z$. For Gaussian noise, $J(N) = 1/\sigma^2$.
 \end{lemma}
 
@@ -662,7 +662,7 @@ In this paper, we introduced a spectral certificate of output-space irreversibil
 Key empirical findings: (i) the rank-one baseline holds under standard training ($\rho<5\times10^{-3}$ across all datasets, random-subset baseline), surging $10\times$ under overfitting; (ii) MIA and RII measure orthogonal leakage axes, resolving the apparent paradox of near-zero RII with high MIA accuracy; (iii) MHPR with $K=3$ provides a reliable class-level forgetting metric with temperature scaling extending it to low-accuracy regimes; (iv) $\delta$-based MIA (PSSD) achieves $\mathrm{AUC}>0.94$ across MLP-based datasets, exploiting logit geometry that remains discriminative when softmax confidence is random; (v) cross-modal and cross-scale transfer: the ordering transfers to text classification (a $2.96\times$ gap between untouched and retrained DistilBERT) and to a 7B-parameter language model on the TOFU benchmark, where RII is the only metric separating retraining from no unlearning at 100\% saturated generation accuracy (Section~\ref{sec:llm}); a 0.5B pilot exposes that vocabulary-level channels lack the class semantics needed for discriminative RII, a boundary that capacity partially restores at 7B scale.
 
 \paragraph{Practical recommendations.}
-For practitioners, RII requires only one forward pass over the forget and retain sets ($O(CN)$ time, $O(C)$ memory), making it deployable as a routine compliance check. Concretely: (1) use RII as a standard black-box audit for unlearning compliance; (2) for class-level forgetting, use MHPR with $K=3$ and adaptive temperature selection; (3) report RII alongside MIA for a two-axis leakage assessment; (4) for per-sample leakage detection, use the PSSD framework with $M=20$ quantized states. The subsampling formula (Proposition~\ref{prop:confidence}) enables efficient auditing at scale (Section~\ref{sec:deployment}).
+For practitioners, RII requires only one forward pass over the forget and retain sets ($O(CN)$ time, $O(C)$ memory), making it deployable as a routine compliance check. Concretely: (1) use RII as a standard black-box audit for unlearning compliance; (2) for class-level forgetting, use MHPR with $K=3$ and adaptive temperature selection; (3) report RII alongside MIA for a two-axis leakage assessment; (4) for per-sample leakage detection, use the PSSD framework with $m=20$ quantized states. The subsampling formula (Proposition~\ref{prop:confidence}) enables efficient auditing at scale (Section~\ref{sec:deployment}).
 
 \textbf{We advocate that every machine unlearning audit should report RII alongside MIA:} the former certifies distributional erasure, the latter bounds distributional shift.
 
@@ -679,14 +679,14 @@ RII and MHPR certify output-level indistinguishability of the channel but cannot
 
 \subsection{Definitions}
 
-Let $Q:\mathbb{R}^C\to\{1,\dots,M\}$ be the $k$-means quantizer of \S\ \ref{sec:logit_bridge}. The \textbf{retain reference distribution} is
+Let $Q:\mathbb{R}^C\to\{1,\dots,m\}$ be the $k$-means quantizer of \S\ \ref{sec:logit_bridge}. The \textbf{retain reference distribution} is
 \begin{equation}
-\pi_r(s) = \frac{1}{N_r}\sum_{x\in D_r}\mathbf{1}\{Q(z(x))=s\}, \qquad \boldsymbol{\pi}_r\in\Delta^{M-1}.
+\pi_r(s) = \frac{1}{N_r}\sum_{x\in D_r}\mathbf{1}\{Q(z(x))=s\}, \qquad \boldsymbol{\pi}_r\in\Delta^{m-1}.
 \end{equation}
 
 \begin{definition}[Individual State Disparity (ISD)]
 \label{def:isd}
-For $x$ with state $s(x)=Q(z(x))$, $\delta(x)\coloneqq 1-\pi_r(s(x))\in[0,1-1/M]$, measuring how ``surprising'' the sample's logit state is relative to the retain distribution.
+For $x$ with state $s(x)=Q(z(x))$, $\delta(x)\coloneqq 1-\pi_r(s(x))\in[0,1-1/m]$, measuring how ``surprising'' the sample's logit state is relative to the retain distribution.
 \end{definition}
 
 \begin{definition}[Aggregate PSSD Metrics]
@@ -703,16 +703,16 @@ where $\delta_{[1]}\ge\cdots$ are order statistics. $\Psi$ quantifies the \emph{
 
 \begin{proposition}[PSSD--RII Connection]
 \label{prop:pssd_rii}
-$\Delta_f = 1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$. When $\|\boldsymbol{\pi}_f\|_2=\|\boldsymbol{\pi}_r\|_2=s$, the state-space RII satisfies $\rho_{\mathcal{S}}=\frac{s-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{2s}=\frac{1}{2}\bigl(1-\frac{\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{\|\boldsymbol{\pi}_f\|_2^2}\bigr)$. The gap $|\Delta_f-\rho_{\mathcal{S}}|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/M)+O(\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_2^2)$. Hence $\Delta_f$ and $\rho_{\mathcal{S}}$ are asymptotically equivalent as $\boldsymbol{\pi}_f\to\boldsymbol{\pi}_r$, and $\rho_{\mathcal{S}}=0$ iff $\Delta_f = 1-\|\boldsymbol{\pi}_r\|_2^2$.
+$\Delta_f = 1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$. When $\|\boldsymbol{\pi}_f\|_2=\|\boldsymbol{\pi}_r\|_2=s$, the state-space RII satisfies $\rho_{\mathcal{S}}=\frac{s-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{2s}=\frac{1}{2}\bigl(1-\frac{\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{\|\boldsymbol{\pi}_f\|_2^2}\bigr)$. The gap $|\Delta_f-\rho_{\mathcal{S}}|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/m)+O(\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_2^2)$. Hence $\Delta_f$ and $\rho_{\mathcal{S}}$ are asymptotically equivalent as $\boldsymbol{\pi}_f\to\boldsymbol{\pi}_r$, and $\rho_{\mathcal{S}}=0$ iff $\Delta_f = 1-\|\boldsymbol{\pi}_r\|_2^2$.
 \end{proposition}
 
 \begin{proof}[Sketch]
-$\Delta_f=\frac1{N_f}\sum_i(1-\pi_r(s_i))=1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$. The gap follows by expanding $\rho_{\mathcal{S}}$ around $\boldsymbol{\pi}_f=\boldsymbol{\pi}_r$ and bounding $|\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle-\|\boldsymbol{\pi}_r\|_2^2|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/M)$.
+$\Delta_f=\frac1{N_f}\sum_i(1-\pi_r(s_i))=1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$. The gap follows by expanding $\rho_{\mathcal{S}}$ around $\boldsymbol{\pi}_f=\boldsymbol{\pi}_r$ and bounding $|\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle-\|\boldsymbol{\pi}_r\|_2^2|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/m)$.
 \end{proof}
 
 \begin{proposition}[Concentration Bounds]
 \label{prop:pssd_conc}
-Since $\delta(x)\in[0,1]$, Hoeffding gives $|\hat{\Delta}_f-\Delta_f|\le\sqrt{\log(2/\delta)/(2N_f)}$ and $|\hat{\Psi}-\Psi|\le\sqrt{2\log(4/\delta)/N_{\min}}$ with probability $\ge1-\delta$. No sub-Gaussian assumption is required, unlike Proposition~\ref{prop:confidence}.
+Since $\delta(x)\in[0,1]$, Hoeffding gives $|\hat{\Delta}_f-\Delta_f|\le\sqrt{\log(2/\zeta)/(2N_f)}$ and $|\hat{\Psi}-\Psi|\le\sqrt{2\log(4/\zeta)/N_{\min}}$ with probability $\ge1-\zeta$. No sub-Gaussian assumption is required, unlike Proposition~\ref{prop:confidence}.
 \end{proposition}
 
 \begin{proposition}[Per-Sample MHPR Jensen Gap]
@@ -734,12 +734,12 @@ For $L$-layer models, each sample has a state trajectory $\mathbf{s}(x)=(s_1,\do
 
 \subsection{Experimental Results}
 
-We evaluate PSSD on class-level forgetting with $k$-means quantization ($M{=}20$ states, $K{=}3$ held-out). Table~\ref{tab:pssd_results} reports the MPSD $\Delta_f$, excess $\Psi$, and MIA AUC for both $\delta$-based and confidence-based classifiers after 5 gradient ascent steps.
+We evaluate PSSD on class-level forgetting with $k$-means quantization ($m{=}20$ states, $K{=}3$ held-out). Table~\ref{tab:pssd_results} reports the MPSD $\Delta_f$, excess $\Psi$, and MIA AUC for both $\delta$-based and confidence-based classifiers after 5 gradient ascent steps.
 
 \begin{table}[t]
 \centering
 \small
-\caption{PSSD metrics vs.\ MIA ($M{=}20$, $K{=}3$, 5-step ascent).}\label{tab:pssd_results}
+\caption{PSSD metrics vs.\ MIA ($m{=}20$, $K{=}3$, 5-step ascent).}\label{tab:pssd_results}
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{l c c c c}
 \toprule
@@ -754,7 +754,7 @@ CIFAR-10 & 0.978 & 0.001 & 0.511 & 0.807 \\
 
 $\delta$-based MIA dominates confidence-based MIA on MLP models (Table~\ref{tab:pssd_results}), exploiting logit geometry that remains discriminative even when softmax confidence is random. For CIFAR-10 (CNN), the advantage narrows considerably: $\mathrm{AUC}(\delta){=}0.511$ vs $\mathrm{AUC}(\mathrm{conf.}){=}0.807$, because the CNN's softmax confidence itself provides a strong MIA signal while the excess disparity $\Psi{=}0.001$ is near zero.
 
-\paragraph{Sensitivity to $M$ and quantization.} Across $M{=}20,50,100$ on MNIST, the MPSD is stable ($\Delta_f{=}0.997{\pm}0.002$) and $\delta$-MIA AUC remains $>0.97$, while $\Psi$ decreases from $0.066$ to $0.014$ and $\rho_{\mathcal{S}}$ from $0.176$ to $0.131$, converging toward $\rho_{\mathrm{sm}}{=}0.109$ as the codebook refines (Theorem~\ref{thm:state_bridge}). We recommend $M{=}2C{=}20$ as a default.
+\paragraph{Sensitivity to $m$ and quantization.} Across $m{=}20,50,100$ on MNIST, the MPSD is stable ($\Delta_f{=}0.997{\pm}0.002$) and $\delta$-MIA AUC remains $>0.97$, while $\Psi$ decreases from $0.066$ to $0.014$ and $\rho_{\mathcal{S}}$ from $0.176$ to $0.131$, converging toward $\rho_{\mathrm{sm}}{=}0.109$ as the codebook refines (Theorem~\ref{thm:state_bridge}). We recommend $m{=}2C{=}20$ as a default.
 
 %=============================================================================
 \section{State-Space Bridge and Operator-Theoretic Generalization}
@@ -765,16 +765,16 @@ $\delta$-based MIA dominates confidence-based MIA on MLP models (Table~\ref{tab:
 
 \begin{lemma}[Quantization Error]
 \label{lem:quantization}
-For $N$ i.i.d. logit vectors $\|z\|_2\le R$, $k$-means with $M$ centers gives quantization error $\mathbb{E}[\|z-\tilde{z}\|_2] \le \tilde{O}(R\sqrt{CM/N}) + O(R\sqrt{\log(1/\zeta)/N})$ with probability $\ge1-\zeta$, where $\tilde{z}$ is the codebook reconstruction. See Appendix~\ref{sec:appendix} for the proof.
+For $N$ i.i.d. logit vectors $\|z\|_2\le R$, $k$-means with $m$ centers gives quantization error $\mathbb{E}[\|z-\tilde{z}\|_2] \le \tilde{O}(R\sqrt{Cm/N}) + O(R\sqrt{\log(1/\zeta)/N})$ with probability $\ge1-\zeta$, where $\tilde{z}$ is the codebook reconstruction. See Appendix~\ref{sec:appendix} for the proof.
 \end{lemma}
 
 \begin{theorem}[Spectrum Bridging: State $\leftrightarrow$ Softmax]
 \label{thm:state_bridge}
-Let $\mathbf{a}_s = \mathbb{E}[\mathbf{p}(x) \mid Q(z(x))=s]$ be the mean softmax within state $s$, and $\mathbf{A} = [\mathbf{a}_1,\dots,\mathbf{a}_M]^\top$ with singular values $\tau_1 \ge \cdots \ge \tau_M > 0$. Let $\mathbf{B}\in\mathbb{R}^{2\times M}$ have rows the forget/retain state-conditional probabilities, so the softmax channel factorizes as $\mathbf{M}_{\mathrm{sm}}=\mathbf{B}\mathbf{A}$. Assume the softmax is $L$-Lipschitz and quantization error $\le \delta_q$ (Lemma~\ref{lem:quantization}). Then
+Let $\mathbf{a}_s = \mathbb{E}[\mathbf{p}(x) \mid Q(z(x))=s]$ be the mean softmax within state $s$, and $\mathbf{A} = [\mathbf{a}_1,\dots,\mathbf{a}_m]^\top$ with singular values $\tau_1 \ge \cdots \ge \tau_m > 0$. Let $\mathbf{B}\in\mathbb{R}^{2\times m}$ have rows the forget/retain state-conditional probabilities, so the softmax channel factorizes as $\mathbf{M}_{\mathrm{sm}}=\mathbf{B}\mathbf{A}$. Assume the softmax is $L$-Lipschitz and quantization error $\le \delta_q$ (Lemma~\ref{lem:quantization}). Then
 \begin{equation}
-|\rho_{\mathcal{S}} - \rho_{\mathrm{sm}}| \le 2\Bigl(\frac{\tau_1}{\tau_M}-1\Bigr)\rho_{\mathcal{S}} + O\!\Bigl(\Bigl(\frac{\tau_1}{\tau_M}-1\Bigr)^2 + \frac{L\delta_q}{\|\boldsymbol{\mu}_f\|_2}\Bigr).
+|\rho_{\mathcal{S}} - \rho_{\mathrm{sm}}| \le 2\Bigl(\frac{\tau_1}{\tau_m}-1\Bigr)\rho_{\mathcal{S}} + O\!\Bigl(\Bigl(\frac{\tau_1}{\tau_m}-1\Bigr)^2 + \frac{L\delta_q}{\|\boldsymbol{\mu}_f\|_2}\Bigr).
 \end{equation}
-If the codebook is well-conditioned ($\tau_1/\tau_M \le 1+\kappa_0$) and $\delta_q$ small, the two RII values are equivalent up to a constant factor. The proof uses the factorization $\mathbf{M}_{\mathrm{sm}}=\mathbf{B}\mathbf{A}$ and bounds the singular values via the right-inverse argument (Appendix~\ref{sec:appendix}).
+If the codebook is well-conditioned ($\tau_1/\tau_m \le 1+\kappa_0$) and $\delta_q$ small, the two RII values are equivalent up to a constant factor. The proof uses the factorization $\mathbf{M}_{\mathrm{sm}}=\mathbf{B}\mathbf{A}$ and bounds the singular values via the right-inverse argument (Appendix~\ref{sec:appendix}).
 \end{theorem}
 
 \begin{theorem}[MHPR Deviation from Softmax RII]
@@ -826,11 +826,11 @@ Setting this $\le\varepsilon$ gives $N_{\min}\ge16C\nu^2\log(4C/\delta)/(\sigma_
 \subsection{Proof of Theorem~\ref{thm:mi_bound} (Spectral MI Bound)}
 \label{app:mi_bound}
 \begin{proof}
-Let $q=P(X{=}f)$, $\bar{q}=1-q$, $P_Y=q\boldsymbol{\mu}_f+\bar{q}\boldsymbol{\mu}_r$, and $\pi_{\min}=\min_y P_r(y)$. In nats, $D_{\mathrm{KL}}\le\chi^2$, so $I(X;Y\mid\theta')\le q\chi^2(\boldsymbol{\mu}_f\|P_Y)+\bar{q}\chi^2(\boldsymbol{\mu}_r\|P_Y)$. Since $P_Y(y)\ge\bar{q}\pi_{\min}$,
+Let $q=P(X{=}f)$, $\bar{q}=1-q$, $P_Y=q\boldsymbol{\mu}_f+\bar{q}\boldsymbol{\mu}_r$, and $\pi_{\min}=\min_y (\boldsymbol{\mu}_r)_y$. In nats, $D_{\mathrm{KL}}\le\chi^2$, so $I(X;Y\mid\theta')\le q\chi^2(\boldsymbol{\mu}_f\|P_Y)+\bar{q}\chi^2(\boldsymbol{\mu}_r\|P_Y)$. Since $P_Y(y)\ge\bar{q}\pi_{\min}$,
 \begin{equation}
 \chi^2(\boldsymbol{\mu}_f\|P_Y)=\sum_y\frac{\bar{q}^2(\mu_f(y)-\mu_r(y))^2}{P_Y(y)}\le\frac{\bar{q}\,\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2}{\pi_{\min}},
 \end{equation}
-and symmetrically $\chi^2(\boldsymbol{\mu}_r\|P_Y)\le q\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2/\pi_{\min}$, so $I\le\frac{2q\bar{q}}{\pi_{\min}}\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2$. Under the equal-norm condition $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$, $\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2=2\sigma_2^2$ (Def.~\ref{def:M}), so $I\le\frac{4q\bar{q}\sigma_2^2}{\pi_{\min}}\le\frac{\sigma_2^2}{\pi_{\min}}=\frac{\sigma_1^2}{\pi_{\min}}\frac{\rho}{1-\rho}\le\frac{2\sigma_1^2}{\pi_{\min}}\frac{\rho}{1-\rho}$. As $\rho\to0$ the equal-norm condition holds asymptotically, so $I=O(\rho)$ without it.
+and symmetrically $\chi^2(\boldsymbol{\mu}_r\|P_Y)\le q\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2/\pi_{\min}$, so $I\le\frac{2q\bar{q}}{\pi_{\min}}\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2$. Under the equal-norm condition $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$, $\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2=2\sigma_2^2$ (Def.~\ref{def:M}), so $I\le\frac{4q\bar{q}\sigma_2^2}{\pi_{\min}}\le\frac{\sigma_2^2}{\pi_{\min}}=\frac{\sigma_1^2}{\pi_{\min}}\frac{\rho}{1-\rho}$ (since $4q\bar{q}\le1$). As $\rho\to0$ the equal-norm condition holds asymptotically, so $I=O(\rho)$ without it.
 \end{proof}
 
 \subsection{Proof of Theorem~\ref{thm:finetune} (Fine-Tuning Leakage Bound)}
@@ -849,7 +849,7 @@ Here $\mathbf{J}_{\mathrm{softmax}}$ denotes the Jacobian of the softmax map and
 \begin{equation}
 \Delta\boldsymbol{\mu}_f=\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_f=\frac{\lambda}{N_f}\sum_{x\in D_f}\mathbf{J}_{\mathrm{softmax}}(f_{\theta_0}(x))\mathbf{J}_\theta f_{\theta_0}(x)\mathbf{g}+O(\lambda^2),
 \end{equation}
-and $\|\Delta\boldsymbol{\mu}_r\|_2\le\lambda L\|\mathbf{g}\|_2$ for retain samples (uniform softmax Jacobian bound). The squared displacement satisfies $\|\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_r'\|_2^2\le\|\Delta\boldsymbol{\mu}_f\|_2^2+\|\Delta\boldsymbol{\mu}_r\|_2^2+2\|\Delta\boldsymbol{\mu}_f\|_2\|\Delta\boldsymbol{\mu}_r\|_2$ (the first-order cross term with $\boldsymbol{\mu}_f-\boldsymbol{\mu}_r$ vanishes by symmetry of the balanced retain set). With $\mathbf{g}$ normalized to unit scale (its norm absorbed into $\lambda$), $\|\Delta\boldsymbol{\mu}_f\|_2\le\lambda L\sqrt{\mathrm{Tr}(\boldsymbol{\Sigma}_f)}$,
+and $\|\Delta\boldsymbol{\mu}_r\|_2\le\lambda L\|\mathbf{g}\|_2$ for retain samples (uniform softmax Jacobian bound). The squared displacement satisfies $\|\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_r'\|_2^2\le\|\Delta\boldsymbol{\mu}_f\|_2^2+\|\Delta\boldsymbol{\mu}_r\|_2^2+2\|\Delta\boldsymbol{\mu}_f\|_2\|\Delta\boldsymbol{\mu}_r\|_2$ (the first-order cross term with $\boldsymbol{\mu}_f-\boldsymbol{\mu}_r$ vanishes by symmetry of the balanced retain set). With $\|\Delta\boldsymbol{\mu}_f\|_2\le\lambda L\|\mathbf{g}\|_2\sqrt{\mathrm{Tr}(\boldsymbol{\Sigma}_f)}$ (the theorem's $\lambda$ absorbs $\|\mathbf{g}\|_2$; equivalently the gradient is normalized to unit scale),
 \begin{equation}
 \|\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_r'\|_2^2\le\lambda^2L^2\mathrm{Tr}(\boldsymbol{\Sigma}_f)+O(\lambda^3).
 \end{equation}
@@ -859,18 +859,18 @@ Using $\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2=\sqrt{2}\sigma_2$ and $\rho\a
 \subsection{Proof Sketch of Theorem~\ref{thm:unified} (Unified Decomposition)}
 \label{app:unified}
 \begin{proof}
-By the chain rule, $I(X;R) \le I(X;Y) + I(X;R\mid Y)$. For the cover term, the Hilbert--Schmidt decomposition $f_{Y|X}(y|x) = f_Y(y) + \sum_{k\ge 2}\sigma_k\phi_k(y)\psi_k(x)$ yields $\mathbb{E}_X[\chi^2(P_{Y|X}\|P_Y)] = \sum_{k\ge 2}\sigma_k^2 = \eta^2$ via orthonormality of $\{\phi_k\},\{\psi_k\}$. Since $D_{\mathrm{KL}} \le \chi^2$, we have $I(X;Y) \le \eta^2$. For the direct term, conditioned on $Y=y$, $R = \alpha X + \beta y + N$. By Lemma~\ref{lem:fisher} (Fisher information expansion), $I(X;R\mid Y) = \frac{\alpha^2}{2\sigma^2}\operatorname{Var}(X) + o(\alpha^2)$. Summing yields the decomposition.
+By the chain rule, $I(X;R) \le I(X;Y) + I(X;R\mid Y)$. For the cover term, the Hilbert--Schmidt decomposition $f_{Y|X}(y|x) = f_Y(y) + \sum_{k\ge 2}\sigma_k\phi_k(y)\psi_k(x)$ gives $\chi^2(P_{Y|X=x}\|P_Y)=\int\frac{(\sum_{k\ge2}\sigma_k\phi_k(y)\psi_k(x))^2}{f_Y(y)}\,dy=\sum_{k\ge2}\sigma_k^2\psi_k(x)^2$; averaging over $X$ and using $\mathbb{E}_X[\psi_k(X)^2]=1$ yields $\mathbb{E}_X[\chi^2(P_{Y|X}\|P_Y)] = \sum_{k\ge 2}\sigma_k^2 = \eta^2$. Since $D_{\mathrm{KL}} \le \chi^2$, we have $I(X;Y) \le \eta^2$. For the direct term, conditioned on $Y=y$, $R = \alpha X + \beta y + N$. By Lemma~\ref{lem:fisher} (Fisher information expansion), $I(X;R\mid Y) = \frac{\alpha^2}{2\sigma^2}\operatorname{Var}(X) + o(\alpha^2)$. Summing yields the decomposition.
 \end{proof}
 
 \begin{proof}[Proof of Theorem~\ref{thm:state_bridge}]
-From $\mathbf{M}_{\mathrm{sm}} = \mathbf{B}\mathbf{A}$, the variational characterization of singular values gives $\sigma_i(\mathbf{B}\mathbf{A}) \le \tau_1\sigma_i(\mathbf{B})$ and $\sigma_i(\mathbf{B}\mathbf{A}) \ge \tau_M\sigma_i(\mathbf{B})$ using the right inverse $\mathbf{A}^+$. Thus $\frac{\tau_M}{\tau_1}\epsilon \le \tilde{\epsilon} \le \frac{\tau_1}{\tau_M}\epsilon$ where $\epsilon=\sigma_2/\sigma_1$, yielding $|\rho_{\mathrm{sm}}-\rho_{\mathcal{S}}| \le 2(\tau_1/\tau_M-1)\rho_{\mathcal{S}} + O((\tau_1/\tau_M-1)^2)$. The $L\delta_q/\|\boldsymbol{\mu}_f\|_2$ term accounts for within-state variance of $\mathbf{a}_s$.
+From $\mathbf{M}_{\mathrm{sm}} = \mathbf{B}\mathbf{A}$ and the variational characterization $\sigma_i(\mathbf{B}\mathbf{A})=\max_{\dim V=i}\min_{v\in V}\|\mathbf{B}\mathbf{A}v\|_2/\|v\|_2$, the upper bound follows from $\|\mathbf{A}v\|_2\le\tau_1\|v\|_2$: $\sigma_i(\mathbf{B}\mathbf{A})\le\tau_1\sigma_i(\mathbf{B})$. For the lower bound, the right inverse $\mathbf{A}\mathbf{A}^+=\mathbf{I}_m$ gives $\mathbf{B}=\mathbf{B}\mathbf{A}\mathbf{A}^+$, so $\sigma_i(\mathbf{B})\le\|\mathbf{A}^+\|_2\,\sigma_i(\mathbf{B}\mathbf{A})=\tau_m^{-1}\sigma_i(\mathbf{B}\mathbf{A})$, i.e., $\sigma_i(\mathbf{B}\mathbf{A})\ge\tau_m\sigma_i(\mathbf{B})$. Thus $\frac{\tau_m}{\tau_1}\epsilon \le \tilde{\epsilon} \le \frac{\tau_1}{\tau_m}\epsilon$ where $\epsilon=\sigma_2/\sigma_1$, yielding $|\rho_{\mathrm{sm}}-\rho_{\mathcal{S}}| \le 2(\tau_1/\tau_m-1)\rho_{\mathcal{S}} + O((\tau_1/\tau_m-1)^2)$. The $L\delta_q/\|\boldsymbol{\mu}_f\|_2$ term accounts for within-state variance of $\mathbf{a}_s$.
 \end{proof}
 
 \subsection{Bridge and $\chi^2$ Control Proofs}
 \label{app:bridge_proofs}
 
 \begin{proof}[Proof of Theorem~\ref{thm:state_mhpr}]
-$\rho_{H,\mathcal{S}} = \min_{\mathbf{w}} \|\boldsymbol{\pi}_f - \sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2 / \|\boldsymbol{\pi}_f\|_2^2 \le \|\boldsymbol{\pi}_f - \bar{\boldsymbol{\pi}}_H\|_2^2 / \|\boldsymbol{\pi}_f\|_2^2$. Since $1/\bar{\pi}_H(m) \ge 1$, we have $\|\boldsymbol{\pi}_f - \bar{\boldsymbol{\pi}}_H\|_2^2 \le \chi^2(\boldsymbol{\pi}_f\|\bar{\boldsymbol{\pi}}_H)$. With $\|\boldsymbol{\pi}_f\|_2^2 \ge \gamma$ and $\chi^2 \le \eta^2$, we obtain $\rho_{H,\mathcal{S}} \le \eta^2/\gamma$.
+$\rho_{H,\mathcal{S}} = \min_{\mathbf{w}} \|\boldsymbol{\pi}_f - \sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2 / \|\boldsymbol{\pi}_f\|_2^2 \le \|\boldsymbol{\pi}_f - \bar{\boldsymbol{\pi}}_H\|_2^2 / \|\boldsymbol{\pi}_f\|_2^2$. Since $1/\bar{\pi}_H(m) \ge 1$, we have $\|\boldsymbol{\pi}_f - \bar{\boldsymbol{\pi}}_H\|_2^2 \le \chi^2(\boldsymbol{\pi}_f\|\bar{\boldsymbol{\pi}}_H)$. With $\|\boldsymbol{\pi}_f\|_2^2 \ge \gamma$ and $\chi^2 \le \tau^2$, we obtain $\rho_{H,\mathcal{S}} \le \tau^2/\gamma$.
 \end{proof}
 
 \begin{proof}[Proof of Theorem~\ref{thm:softmax_deviation}]
@@ -909,7 +909,7 @@ Since $\mathcal{S}_{K_1} \subseteq \mathcal{S}_{K_2}$, the orthogonal projection
 Under $\mathcal{H}_0$ ($\boldsymbol{\mu}_f^* \in \mathcal{S}_K^*$), $\mathbb{E}[\rho_{\mathrm{est}}] = O(C/N_{\min})$.
 \end{proposition}
 \begin{proof}
-Under $\mathcal{H}_0$ ($\boldsymbol{\mu}_f^*=\mathbf{P}_{\mathcal{S}_K^*}\boldsymbol{\mu}_f^*$), the numerator expands to $\|(\mathbf{I}-\mathbf{P}_{\mathcal{S}_K^*})\boldsymbol{\delta}_f-\Delta_H\boldsymbol{\mu}_f^*-\Delta_H\boldsymbol{\delta}_f\|_2^2$ with $\boldsymbol{\delta}_f=\hat{\boldsymbol{\mu}}_f-\boldsymbol{\mu}_f^*$ and $\Delta_H=\mathbf{P}_{\mathcal{S}_K}-\mathbf{P}_{\mathcal{S}_K^*}$. Standard bounds give $\|\boldsymbol{\delta}_f\|_2=O_p(\sqrt{C/N_f})$ and $\|\Delta_H\|_2=O_p(\sqrt{CK/N_{\min}})$ via sub-Gaussian concentration and subspace perturbation~\cite{stewart1990matrix}; the denominator converges at rate $O_p(1/\sqrt{N_f})$. The delta method yields $\mathbb{E}[\rho_{\mathrm{est}}]=O(CK/N_{\min})$, which is $O(C/N_{\min})$ for $K=O(1)$.
+Under $\mathcal{H}_0$ ($\boldsymbol{\mu}_f^*=\mathbf{P}_{\mathcal{S}_K^*}\boldsymbol{\mu}_f^*$), the numerator expands to $\|(\mathbf{I}-\mathbf{P}_{\mathcal{S}_K^*})\boldsymbol{\delta}_f-\Delta_H\boldsymbol{\mu}_f^*-\Delta_H\boldsymbol{\delta}_f\|_2^2$ with $\boldsymbol{\delta}_f=\hat{\boldsymbol{\mu}}_f-\boldsymbol{\mu}_f^*$ and $\Delta_H=\mathbf{P}_{\mathcal{S}_K}-\mathbf{P}_{\mathcal{S}_K^*}$. Standard bounds give $\|\boldsymbol{\delta}_f\|_2=O_p(\sqrt{C/N_f})$ and $\|\Delta_H\|_2=O_p(\sqrt{CK/N_{\min}})$ via sub-Gaussian concentration and subspace perturbation~\cite{stewart1990matrix}; the denominator converges at rate $O_p(1/\sqrt{N_f})$. A second-order Taylor expansion $\rho_{\mathrm{est}}\approx\rho_H^*+\nabla\rho_H^*\,(\hat{\mathbf{z}}-\mathbf{z}^*)+\frac12(\hat{\mathbf{z}}-\mathbf{z}^*)^\top\nabla^2\rho_H^*\,(\hat{\mathbf{z}}-\mathbf{z}^*)$ has zero mean for the linear term (the estimator is unbiased to first order); the quadratic term is $O(\|\hat{\mathbf{z}}-\mathbf{z}^*\|_2^2)=O_p(CK/N_{\min})$. The delta method therefore yields $\mathbb{E}[\rho_{\mathrm{est}}]=O(CK/N_{\min})$, which is $O(C/N_{\min})$ for $K=O(1)$.
 \end{proof}
 
 \begin{proposition}[Finite-Sample Bound]
@@ -921,18 +921,18 @@ For sub-Gaussian softmax vectors with variance proxy $\nu^2$ and $\sigma_{\min}(
 with probability $\ge 1-\delta$.
 \end{proposition}
 \begin{proof}
-Let $\hat{\mathbf{z}}=(\hat{\boldsymbol{\mu}}_f,\hat{\boldsymbol{\mu}}_{h_1},\dots,\hat{\boldsymbol{\mu}}_{h_K})$. For the forget direction, $\|\nabla_{\boldsymbol{\mu}_f}\phi\|_2\le4/\|\boldsymbol{\mu}_f\|_2$ (from $\nabla\phi=2(\mathbf{I}-\mathbf{P}_{\mathcal{S}_K})\boldsymbol{\mu}_f/\|\boldsymbol{\mu}_f\|_2^2-2\phi\boldsymbol{\mu}_f/\|\boldsymbol{\mu}_f\|_2^2$); for each held-out direction, Davis--Kahan~\cite{stewart1990matrix} gives $\|\nabla_{\boldsymbol{\mu}_{h_k}}\phi\|_2\le2/\sigma_{\min}(\mathbf{H}^*)$. With $\|\hat{\boldsymbol{\mu}}_f\|_2\ge\|\boldsymbol{\mu}_f^*\|_2/2$ (large $N_f$), the combined Lipschitz constant is $L=\frac{4}{\|\boldsymbol{\mu}_f^*\|_2}(2+\frac{\sqrt{K}\|\boldsymbol{\mu}_f^*\|_2}{\sigma_{\min}(\mathbf{H}^*)})$. Hoeffding with a union bound over $(K+1)C$ entries gives $\|\hat{\mathbf{z}}-\mathbf{z}^*\|_\infty\le2\nu\sqrt{\log(2(K+1)C/\delta)/N_{\min}}$ w.h.p., so $|\hat{\rho}_H-\rho_H^*|\le L\sqrt{(K+1)C}\|\hat{\mathbf{z}}-\mathbf{z}^*\|_\infty$.
+Let $\hat{\mathbf{z}}=(\hat{\boldsymbol{\mu}}_f,\hat{\boldsymbol{\mu}}_{h_1},\dots,\hat{\boldsymbol{\mu}}_{h_K})$. For the forget direction, $\|\nabla_{\boldsymbol{\mu}_f}\phi\|_2\le4/\|\boldsymbol{\mu}_f\|_2$ (from $\nabla\phi=2(\mathbf{I}-\mathbf{P}_{\mathcal{S}_K})\boldsymbol{\mu}_f/\|\boldsymbol{\mu}_f\|_2^2-2\phi\boldsymbol{\mu}_f/\|\boldsymbol{\mu}_f\|_2^2$); for each held-out direction, Davis--Kahan~\cite{stewart1990matrix} gives $\|\nabla_{\boldsymbol{\mu}_{h_k}}\phi\|_2\le2/\sigma_{\min}(\mathbf{H}^*)$. With $\|\hat{\boldsymbol{\mu}}_f\|_2\ge\|\boldsymbol{\mu}_f^*\|_2/2$ (large $N_f$), the combined Lipschitz constant is $L=\frac{4}{\|\boldsymbol{\mu}_f^*\|_2}(2+\frac{\sqrt{K}\|\boldsymbol{\mu}_f^*\|_2}{\sigma_{\min}(\mathbf{H}^*)})$. Hoeffding with a union bound over $(K+1)C$ entries gives $\|\hat{\mathbf{z}}-\mathbf{z}^*\|_\infty\le2\nu\sqrt{\log(2(K+1)C/\delta)/N_{\min}}$ with high probability, so $|\hat{\rho}_H-\rho_H^*|\le L\sqrt{(K+1)C}\|\hat{\mathbf{z}}-\mathbf{z}^*\|_\infty$.
 \end{proof}
 
 \subsection{State-Space MHPR Bound Validation}
 \label{app:chi2}
 
-We validate Theorem~\ref{thm:state_mhpr} on the MNIST class-5 setup ($M=20$ states, $K=3$ held-out). The bound $\rho_{H,\mathcal{S}} \le \chi^2/\|\boldsymbol{\pi}_f\|_2^2$ holds for \emph{every} gradient step (Table~\ref{tab:chi2}); both $\rho_{H,\mathcal{S}}$ and $\chi^2$ grow monotonically with forgetting strength, and the bound is conservative (ratio $\sim5\times10^2$--$2\times10^3$), as expected for a worst-case inequality.
+We validate Theorem~\ref{thm:state_mhpr} on the MNIST class-5 setup ($m=20$ states, $K=3$ held-out). The bound $\rho_{H,\mathcal{S}} \le \chi^2/\|\boldsymbol{\pi}_f\|_2^2$ holds for \emph{every} gradient step (Table~\ref{tab:chi2}); both $\rho_{H,\mathcal{S}}$ and $\chi^2$ grow monotonically with forgetting strength, and the bound is conservative (ratio $\sim5\times10^2$--$2\times10^3$), as expected for a worst-case inequality.
 
 \begin{table}[t]
 \centering
 \small
-\caption{State-space MHPR bound validation (MNIST, $M{=}20$, $K{=}3$).}\label{tab:chi2}
+\caption{State-space MHPR bound validation (MNIST, $m{=}20$, $K{=}3$).}\label{tab:chi2}
 \setlength{\tabcolsep}{6pt}
 \begin{tabular}{l c c c}
 \toprule
@@ -953,7 +953,7 @@ Steps & $\rho_{H,\mathcal{S}}$ & $\chi^2$ & $\chi^2/\|\boldsymbol{\pi}_f\|_2^2$ 
 \subsection{PSSD Proofs}
 
 \begin{proof}[Proof of Proposition~\ref{prop:pssd_rii}]
-$\Delta_f = \frac1{N_f}\sum_{x\in D_f}(1-\pi_r(s(x))) = 1-\sum_s\pi_f(s)\pi_r(s)=1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$. For the gap, when $\|\boldsymbol{\pi}_f\|_2=\|\boldsymbol{\pi}_r\|_2=s$, the state-space RII is $\rho_{\mathcal{S}}=\frac{s-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{2s}$. Expanding around $\boldsymbol{\pi}_f=\boldsymbol{\pi}_r$ gives $|\Delta_f-\rho_{\mathcal{S}}|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/M)+O(\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_2^2)$, where the $\ell_1$ term dominates via $|\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle-\|\boldsymbol{\pi}_r\|_2^2|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1\|\boldsymbol{\pi}_r\|_\infty\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/M)$.
+$\Delta_f = \frac1{N_f}\sum_{x\in D_f}(1-\pi_r(s(x))) = 1-\sum_s\pi_f(s)\pi_r(s)=1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$. For the gap, when $\|\boldsymbol{\pi}_f\|_2=\|\boldsymbol{\pi}_r\|_2=s$, the state-space RII is $\rho_{\mathcal{S}}=\frac{s-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{2s}$. Expanding around $\boldsymbol{\pi}_f=\boldsymbol{\pi}_r$ gives $|\Delta_f-\rho_{\mathcal{S}}|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/m)+O(\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_2^2)$, where the $\ell_1$ term dominates via $|\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle-\|\boldsymbol{\pi}_r\|_2^2|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1\|\boldsymbol{\pi}_r\|_\infty\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/m)$.
 \end{proof}
 
 \begin{proof}[Proof of Proposition~\ref{prop:pssd_conc}]
@@ -971,7 +971,7 @@ since $\rho_H(\boldsymbol{\pi}_f)=\min_{\mathbf{w}}\|\boldsymbol{\pi}_f-\sum_k w
 \begin{proof}[Proof of Theorem~\ref{thm:pssd_mia}]
 (i) If $\Psi>0$, the forget-side mean of $\delta$ exceeds the retain-side mean; the Bayes-optimal test is a likelihood-ratio test, so some threshold achieves $\mathrm{TPR}>\mathrm{FPR}$, i.e., $\mathrm{AUC}>0.5$.
 
-(ii) Le Cam--Bregman gives $\mathrm{TV}\le\mathrm{H}$ for $P_{\delta|f},P_{\delta|r}$, and $\mathrm{AUC}\ge1-\mathrm{TV}/2$ for threshold classifiers, yielding the Hellinger bound.
+(ii) With $\mathrm{H}^2(P,Q)=1-\sum_i\sqrt{p_iq_i}$, the total variation satisfies $\mathrm{TV}(P_{\delta|f},P_{\delta|r})\le\mathrm{H}(P_{\delta|f},P_{\delta|r})$ (Le Cam). For a threshold classifier, $\mathrm{AUC}=\frac12(1+\mathrm{TPR}-\mathrm{FPR})\ge\frac12(1-\mathrm{TV})$, since over the optimal threshold $\mathrm{TPR}-\mathrm{FPR}\ge1-\mathrm{TV}$. Combining gives the Hellinger bound $\mathrm{AUC}\ge1-\frac12\mathrm{H}^2$.
 
 (iii) AUC is a $U$-statistic with bounded kernel, so Hoeffding gives $|\widehat{\mathrm{AUC}}-\mathrm{AUC}|\le\sqrt{\log(2/\zeta)/(2(N_f+N_r))}$.
 
@@ -980,7 +980,7 @@ The empirical advantage over softmax-based MIA (Table~\ref{tab:pssd_results}) fo
 
 \subsection{Proof of Lemma~\ref{lem:quantization} (Quantization Error Bound)}
 \begin{proof}
-For i.i.d.\ $\|z\|_2\le R$ with optimal $M$-center distortion $D^*=\mathbb{E}[\min_{c\in\mathcal{C}^*}\|z-c\|_2^2]$, standard covering-number arguments for $k$-means \cite{kumar2010clustering} give excess distortion $D(\hat{\mathcal{C}})-D^*=O(R^2\sqrt{CM/N})$ w.h.p. Since $\mathbb{E}[\|z-\tilde{z}\|_2]\le\sqrt{D(\hat{\mathcal{C}})}$ and $D^*\le R^2$, taking square roots yields $\tilde{O}(R\sqrt{CM/N})$; the $O(R\sqrt{\log(1/\zeta)/N})$ tail bound follows from a union bound over the empirical distortion estimate.
+For i.i.d.\ $\|z\|_2\le R$ with optimal $m$-center distortion $D^*=\mathbb{E}[\min_{c\in\mathcal{C}^*}\|z-c\|_2^2]$, the excess-distortion bound $D(\hat{\mathcal{C}})-D^*=O(R^2\sqrt{Cm/N})$ of Kumar--Kannan~\cite{kumar2010clustering} holds with high probability. Since $\mathbb{E}[\|z-\tilde{z}\|_2]\le\sqrt{D(\hat{\mathcal{C}})}$ and $D^*\le R^2$, taking square roots yields $\tilde{O}(R\sqrt{Cm/N})$; the $O(R\sqrt{\log(1/\zeta)/N})$ tail bound follows from a union bound over the empirical distortion estimate.
 \end{proof}
 
 \subsection{Temperature Scaling Information Preservation}
