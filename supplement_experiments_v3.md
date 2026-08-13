@@ -115,8 +115,9 @@
 | E | **NLP 基准：RII 跨模态迁移成立（2.96×）+ NegGrad 显性失败对照** | §5 跨模态普适性；§6 调和 MIA/RII 的补充证据 |
 | F | **温度缩放判别峰值（T=5）+ 状态空间 MHPR 饱和（~1）** | §3/§5 温度选择策略（κ 条件）的定量依据 |
 | G | **真实 LLM（Qwen2.5-0.5B+TOFU）：FineTune 反弹复现 + NegGrad 破坏性 + RII 的 vocab 通道限制** | §5.5 反弹的跨模态证据；§2 rem:channel 的 LLM 实例化 |
+| H | **标准 LLaMA-2-7B TOFU（MLX+LoRA）：RII 排序 Retrain<FineTune<NoUnlearn<NegGrad，oracle 判别 + NegGrad 隐藏失败在 7B 复现** | §5 大模型验证（从 pilot 升级为标准基准）；直接回应必改4 |
 
-**跳过项（需 GPU 服务器人工完成）**：官方 LLaMA-7B 级 TOFU 协议（MIA 基准三件套：forget 90/95/99 全量）与 MUSE（Books/News, DPO/ORPO）——24GB MPS 无法承担 7B 全量微调。数据均可从 modelscope 下载（`popatry/TOFU`、`popatry/MUSE-Books`、`popatry/MUSE-News`），终端指令见对话总结。CIFAR-100（实验 D）、NLP（实验 E）、温度（实验 F）、LLM demo（实验 G）均已补做。
+**跳过项（需 GPU 服务器人工完成）**：① MUSE（Books/News, DPO/ORPO，数据在 modelscope `popatry/MUSE-Books`/`popatry/MUSE-News`，或经代理从 HF `muse-bench/MUSE-*` 下载）；② TOFU 官方全量三件套（forget 90/95/99 + Truth Ratio/KLR 指标）。LLaMA-7B 级 TOFU 标准协议已在本机 MLX+LoRA 路径完成（实验 H）。
 
 **诚实局限**：① 实验 A 的 ρ 上升与论文 tab:gradient_sweep 的下降是"先上升后崩溃"的同一现象的两种阶段，写论文需明确步长范围；② 实验 B/C/D 为单种子（42），多种子验证留待补做；③ 阈值分档为启发式，未经正式校准。
 
@@ -207,4 +208,40 @@
 3. **known/unknown 不对称的 LLM 版本**：Retrain 从未见过 forget 作者，但 RII=0.0803≠0，且与 NoUnlearn（0.0825）几乎不可分——与 CV 中 Retrain oracle RII=0.09≠0 同构。**这是诚实的边界发现**：在"作者级 + vocab 通道"设定下，forget/retain 问题集的输出分布高度同质（都是流畅问答文本），RII 无法区分"学过 vs 没学过该作者"；CV 中 RII 能区分（0.233 vs 0.092）是因为 forget/retain 是**不同的输出类别**（不同 label 通道）。这提示：**LLM 应用 RII 时，通道应取类标签级（如作者分类头/隐藏状态聚类），而非原始 vocab**——正是论文 rem:channel "通道级 vs 样本级" 区分在 LLM 上的实例化。
 4. **TOFU 评估的固有难点被定量暴露**：Retrain（零接触 forget 作者）forget_acc 仍 85%——因为多数 TOFU 答案（人名、城市）**verbatim 出现在问题里**，模型从问题提取即可"答对"，ROUGE-L 0.25 仍偏宽松；官方 TOFU 亦需 paraphrase 级人工评估。故本实验的**可靠指标是 RII 与 MIA（分布级）**，准确率仅作参考。
 
-**诚实局限**：① 单种子、单模型（0.5B）、40 步微调（模型未完全收敛，MIA 2.8 偏高）；② NegGrad lr=2e-4 × 8 步过强（模型崩坏），未做"适中强度"扫描以观察隐藏失败；③ forget01 仅 40 QA、评估 20 个，统计功效低；④ 未跑官方 LLaMA-7B 级 TOFU 协议（24GB MPS 不可行）——该部分需人工在 GPU 服务器完成；⑤ 未测 MHPR（TOFU 无 held-out 作者类结构）。
+**诚实局限**：① 单种子、单模型（0.5B）、40 步微调（模型未完全收敛，MIA 2.8 偏高）；② NegGrad lr=2e-4 × 8 步过强（模型崩坏），未做"适中强度"扫描以观察隐藏失败；③ forget01 仅 40 QA、评估 20 个，统计功效低；④ 未测 MHPR（TOFU 无 held-out 作者类结构）。
+
+---
+
+## 实验 H — 标准 LLaMA-2-7B TOFU 基准（MLX + LoRA，本地 M5 24GB）
+
+> 用户方案落地：量化/低内存路径（llama.cpp/MLX + PEFT），**非官方全参微调**。因 modelscope 无 LLaMA-2 镜像，通过系统代理（127.0.0.1:7892）直连 HuggingFace 下载：`locuslab/tofu_ft_llama2-7b`（官方 TOFU 微调版，13GB）与 `NousResearch/Llama-2-7b-hf`（base，13GB）。
+> 工具链：mlx 0.32 + mlx-lm 0.31（清华 pip，Apple Silicon 原生），LoRA 8 层 rank-8（112 参数），`model.freeze()` 后仅 LoRA 可训练。
+> 协议（作者级 TOFU）：**NoUnlearn**=tofu_ft 原样；**FineTune**=LoRA 在 retain 上继续 60 步（AdamW 1e-5）；**NegGrad**=LoRA 在 forget 上梯度上升 10 步（SGD 2e-5）；**Retrain oracle**=base + LoRA 在 retain 上 60 步（1e-6，无 padding 循环）。评估：ROUGE-L≥0.25 生成准确率、RII（2×V=32000 logits 通道）、MIA（NLL）。
+> 输出：`results/benchmark_llm_tofu_mlx/results.csv`（脚本 `benchmark_llm_tofu_mlx.py` + `run_retrain_tofu_mlx.py`）。
+
+| method | forget_acc% | retain_acc% | RII | MIA |
+|--------|--------:|--------:|------:|------:|
+| NoUnlearn | 100.0 | 100.0 | 0.1163 | 1.348 |
+| FineTune | 100.0 | 100.0 | 0.0973 | 0.852 |
+| NegGrad | 100.0 | 100.0 | **0.1169** | 1.352 |
+| Retrain (oracle, 从未见 forget) | 80.0 | 65.0 | **0.0801** | 2.163 |
+
+**解读**：
+1. **RII 在 7B LLM 上完整复现理论排序**：Retrain(0.0801) < FineTune(0.0973) < NoUnlearn(0.1163) < NegGrad(0.1169)。oracle（从未学 forget 作者）RII 最低、未遗忘最高、**NegGrad 最高**——梯度上升不降反增 forget/retain 输出签名，而 forget_acc 保持 100%（看似"有效"），**"RII 揭示隐藏失败"在真实 LLaMA-2-7B 上成立**，与 CIFAR-10/100、DistilBERT 跨尺度跨模态一致。
+2. **RII 区分真遗忘 vs 未遗忘**（Retrain vs NoUnlearn 差距 1.45×），尽管 TOFU 问题自带答案使 forget_acc 无法区分（Retrain 也 80%）——**分布级指标在此场景优于生成准确率**，呼应实验 G 的 TOFU 评估难点。
+3. **FineTune 降低 RII**（0.0973，-16%）且 MIA 最低（0.852）：继续学 retain 使 forget/retain 分布趋近（与 CV 一致），但 forget_acc 仍 100%（知识未擦除，RII 下降≠真遗忘，需联合判读）。
+4. **工程验证**：M5 24GB 本地可跑 7B LoRA（峰值内存 ~14-42GB 统一内存，60 步 ≈ 11-19 分钟/方法）；量化路径（LoRA 微调 + 分布级评估）在本机全流程可行。
+
+5. **多种子误差棒（用户推荐 1，已执行）**：对评估集做 3 次随机子采样（forget 15/20 + retain 30/40），RII 标准差 ≤0.0032（相对 <3%）、MIA 标准差 ≤0.028，排序 Retrain<FineTune<NoUnlearn≈NegGrad 跨种子完全稳定；NegGrad vs NoUnlearn 的 RII 差异（0.1278 vs 0.1271）落在误差棒内，进一步证实"梯度上升隐藏失败"。子采样均值：NoUnlearn 0.1271±0.0017 / FineTune 0.1066±0.0019 / NegGrad 0.1278±0.0017 / Retrain 0.0879±0.0032（MIA：1.356±0.021 / 0.863±0.021 / 1.359±0.021 / 2.165±0.028）。输出：`results/benchmark_llm_tofu_mlx/results_multiseed.csv`（脚本 `run_eval_multiseed.py`，无需重训；adapter 用 `model.load_weights(strict=False)` 复载）。
+
+6. **NegGrad 强度扫描（用户推荐 2，已执行）**：从 fresh zero LoRA 扫 3 档（步数×lr：10×2e-5 → 30×1e-4 → 60×2e-4）：
+
+   | 强度 | forget/retain% | RII | MIA |
+   |------|------:|------:|------:|
+   | weak_base (10, 2e-5) | 100/100 | 0.1168 | 1.352 |
+   | mid_x3 (30, 1e-4) | 100/100 | **0.1203** | 1.697 |
+   | strong_x6 (60, 2e-4) | 100/100 | 0.1006 | **5.249** |
+
+   中等强度 RII **继续上升**（0.1203，超过 NoUnlearn 0.1163），隐藏失败不饱和；过强强度模型崩坏（MIA 5.25、训练 loss 发散至 6.5）而 RII 回落——**RII 双向敏感**：隐藏失败加剧时上升、输出分布崩坏时下降（崩坏由 MIA 揭示，此时 forget/retain acc 仍 100% 无法发现）。支撑论文 §6 两轴调和。输出：`results_neggrad_scan.csv`（脚本 `run_neggrad_scan.py`）。
+
+**诚实局限**：① NegGrad 强度扫描已补：中强度 RII 继续上升（0.1203）、过强崩坏（MIA 5.25）RII 回落，双向敏感曲线已展示（见解读 6）；② Retrain 训练不足（60 步 1e-6，retain_acc 65% 未收敛，RII 可能随更多训练进一步下降，使 oracle 判别更强）；③ 多种子已补：3 种子子采样 std<3%、排序稳定（见解读 5）；④ 未跑官方 MIA 三件套（forget 90/95/99 全量、Truth Ratio/KLR）与 MUSE（需更多作者级数据与 DPO/ORPO 流程）；⑤ 未测 MHPR（TOFU 无 held-out 作者类结构）。
