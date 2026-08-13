@@ -1,7 +1,7 @@
 \documentclass[smallextended]{svjour3}       % Springer journal template (Applied Intelligence)
 \smartqed                                    % flush right qed marks at end of proofs
 %
-\RequirePackage{fix-cm}
+\usepackage{fix-cm}
 %
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
@@ -200,7 +200,7 @@ A natural concern is that $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$ is only a firs
 
 \begin{proposition}[Finite-Sample Confidence]
 \label{prop:confidence}
-Let $\hat{\rho}$ be computed from $N_f, N_r$ samples. For sub-Gaussian softmax vectors with variance proxy $\nu^2$,
+Let $\rho^*$ denote the population RII of the true channel matrix $\mathbf{M}^*$, and $\hat{\rho}$ its estimate from $N_f, N_r$ samples. For sub-Gaussian softmax vectors with variance proxy $\nu^2$,
 \begin{equation}
 \mathbb{P}\!\left(|\hat{\rho} - \rho^*| \le \frac{4\nu}{\sigma_1}\sqrt{\frac{C\log(4C/\delta)}{N_{\min}}}\right) \ge 1-\delta,
 \end{equation}
@@ -282,14 +282,13 @@ Although this work focuses on class-level forgetting, we first establish a brief
 \begin{table}[t]
 \centering
 \small
-\caption{Rank-one baseline: RII under standard training (5\% random forget).}\label{tab:main}
+\caption{Rank-one baseline: RII under standard training (5\% random forget; all rows use NoUnlearn).}\label{tab:main}
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{l c c c c}
 \toprule
 Dataset & Method & Acc.(\%) & $\rho$ & MIA(\%) \\
 \midrule
 MNIST & NoUnlearn & 97.45 & $9.762\times10^{-4}$ & 90.4 \\
-\midrule
 CIFAR-10 & NoUnlearn & 76.1 & $1.20\times10^{-3}$ & 90.5 \\
 CIFAR-100 (SmallCNN) & NoUnlearn & 20.8 & $7.10\times10^{-4}$ & 90.5 \\
 Fashion-MNIST & NoUnlearn & 88.7 & $2.83\times10^{-4}$ & 90.4 \\
@@ -357,6 +356,7 @@ BadTeacher & 97.9 & 17.0 & $1.63{\times}10^{-1}$ & 0.344 & 0.013 & 0.137 & 0.977
 SISA & 69.9 & 0.0 & $6.42{\times}10^{-2}$ & 0.090 & 0.004 & 0.056 & 0.920 \\
 \bottomrule
 \end{tabular}
+\par\vspace{2pt}\footnotesize MIA-loss is a loss-threshold AUC; the value $0.000$ for Retrain is expected (the oracle never trained on the forget class, giving a perfect reverse ranking; see Sec.~\ref{sec:benchmark}).
 \end{table}
 
 \textbf{Known/unknown asymmetry.} Even the retraining oracle (mathematically perfect unlearning) has nonzero RII, $\rho{=}9.15{\times}10^{-2}$: because cat is now an \emph{unseen} class, its output distribution differs from the retain classes, so standard RII cannot certify the oracle as perfect under class-level forgetting. MHPR narrows the gap to NoUnlearn ($0.428$ vs $0.812$).
@@ -521,12 +521,12 @@ Ascent 10 + FineTune & \textbf{0.221} & 75.2 & 0.52 \\
 \end{tabular}
 \end{table}
 
-\paragraph{Cross-dataset and sensitivity.} $\rho\le2\times10^{-3}$ for $C{=}10$--$100$ (MNIST, CIFAR-10/100), confirming the rank-one property is structural. Under deliberate overfitting (Table~\ref{tab:sensitivity}, Sec.~\ref{app:extra}), $\rho$ surges $10\times$ (MNIST 60K$\to$5K, 50 epochs: $9.8\times10^{-4}\to1.24\times10^{-2}$). The controlled $\alpha$-perturbation confirms orthogonal axes: $\alpha{=}0.20$ raises RII $9\times$ while MIA rises by $6.8$ percentage points. ResNet-18 on CIFAR-100 keeps $\rho{=}1.41\times10^{-3}$ (Table~\ref{tab:resnet18}), confirming architecture independence.
+\paragraph{Cross-dataset and sensitivity.} $\rho\le2\times10^{-3}$ for $C{=}10$--$100$ (MNIST, CIFAR-10/100), confirming the rank-one property is structural. Under deliberate overfitting (Table~\ref{tab:sensitivity}, Sec.~\ref{sec:sensitivity}), $\rho$ surges $10\times$ (MNIST 60K$\to$5K, 50 epochs: $9.8\times10^{-4}\to1.24\times10^{-2}$). The controlled $\alpha$-perturbation confirms orthogonal axes: $\alpha{=}0.20$ raises RII $9\times$ while MIA rises by $6.8$ percentage points. ResNet-18 on CIFAR-100 keeps $\rho{=}1.41\times10^{-3}$ (Table~\ref{tab:resnet18}), confirming architecture independence.
 
 \paragraph{Per-sample MHPR gap.} Proposition~\ref{prop:ps_mhpr} predicts $\bar{\rho}_H \ge \|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}}$ (Jensen gap). In our MNIST experiments $\rho_{H,\mathcal{S}}{\approx}0.99999$ and $\bar{\rho}_H{\approx}0.99932$ at baseline, a gap of ${\approx}0.00066$ shrinking to $0.00023$ after 100 gradient steps; larger gaps are expected on more heterogeneous data, making per-sample MHPR more conservative.
 
 \subsection{Large-Scale Validation and Sensitivity}
-\label{app:extra}
+\label{sec:sensitivity}
 
 \begin{table}[t]
 \centering
@@ -679,7 +679,7 @@ RII and MHPR certify output-level indistinguishability of the channel but cannot
 
 \subsection{Definitions}
 
-Let $Q:\mathbb{R}^C\to\{1,\dots,M\}$ be the $k$-means quantizer of \S\ref{sec:logit_bridge}. The \textbf{retain reference distribution} is
+Let $Q:\mathbb{R}^C\to\{1,\dots,M\}$ be the $k$-means quantizer of \S\ \ref{sec:logit_bridge}. The \textbf{retain reference distribution} is
 \begin{equation}
 \pi_r(s) = \frac{1}{N_r}\sum_{x\in D_r}\mathbf{1}\{Q(z(x))=s\}, \qquad \boldsymbol{\pi}_r\in\Delta^{M-1}.
 \end{equation}
@@ -845,7 +845,7 @@ For $c_f\neq c_r$, the logit-gradient inner product at $\theta_0$ is $\langle\na
 \end{proof}
 
 \begin{proof}[Proof of Theorem~\ref{thm:finetune}]
-With $\mathbf{g}=\nabla_\theta\mathcal{L}(\theta_0,D_f)$ and $\theta'=\theta_0+\lambda\mathbf{g}$, a first-order Taylor expansion gives
+Here $\mathbf{J}_{\mathrm{softmax}}$ denotes the Jacobian of the softmax map and $\mathbf{J}_\theta f$ the Jacobian of the logit function with respect to the parameters. With $\mathbf{g}=\nabla_\theta\mathcal{L}(\theta_0,D_f)$ and $\theta'=\theta_0+\lambda\mathbf{g}$, a first-order Taylor expansion gives
 \begin{equation}
 \Delta\boldsymbol{\mu}_f=\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_f=\frac{\lambda}{N_f}\sum_{x\in D_f}\mathbf{J}_{\mathrm{softmax}}(f_{\theta_0}(x))\mathbf{J}_\theta f_{\theta_0}(x)\mathbf{g}+O(\lambda^2),
 \end{equation}
@@ -1001,7 +1001,7 @@ As $T\to\infty$, $\mathbf{p}_T\to\mathbf{1}/C$ and $\rho_T\to0$; the convergence
 Bourtoule L, Chandrasekaran V, Choquette-Choo C A, et al (2021) Machine unlearning. In: 2021 IEEE Symposium on Security and Privacy (SP), IEEE
 
 \bibitem{nguyen2025survey}
-Nguyen T T, Huynh T T, Ren Z, et al (2025) A survey of machine unlearning. ACM Transactions on Intelligent Systems and Technology 16(5):1-46
+Nguyen T T, Huynh T T, Ren Z, et al (2025) A survey of machine unlearning. ACM Transactions on Intelligent Systems and Technology 16(5):1-46. doi:10.1145/3749987
 
 \bibitem{cosma2026ruler}
 Cosma G, Finke A (2026) RULER: representation-level verification of machine unlearning. arXiv:2605.27569
