@@ -148,6 +148,8 @@ Let $\mathcal{H} = \{c_{h1},\dots,c_{hK}\}$ be $K$ held-out classes with mean ve
 \end{equation}
 \end{definition}
 
+Unlike the spectral RII $\rho\in[0,0.5]$---a normalized second singular value of the $2\times C$ channel---$\rho_H$ is the \emph{relative energy of the projection residual} onto the held-out subspace; the different normalizations (spectral energy ratio vs.\ geometric residual norm ratio) account for the different ranges.
+
 \paragraph{Properties.}
 For the MHPR of Definition~\ref{def:mhpr}: (1) Monotonic: $\rho_H(K_2) \le \rho_H(K_1)$ for $K_2 \ge K_1$ (Prop.~\ref{prop:mhpr_monotone}). (2) Dominates LOCO: $\rho_H(K) \le \rho_H(1)$ for $K\ge 2$. (3) Bias--variance: under $\mathcal{H}_0$ (ideal forgetting), $\mathbb{E}[\rho_H] = O(CK/N_{\min})$ (Prop.~\ref{prop:mhpr_bias}); for $K=O(1)$ this is $O(C/N_{\min})$. (4) Finite-sample bound: $|\hat{\rho}_H - \rho_H^*|$ decays as $O(1/\sqrt{N_{\min}})$ with explicit constants (Prop.~\ref{prop:mhpr_confidence}). Proofs are in the appendix.
 
@@ -166,11 +168,12 @@ Quantizing logits into $M$ states ($k$-means on training logits) yields state di
 Let $\boldsymbol{\pi}_f$ be the forget state distribution and $\bar{\boldsymbol{\pi}}_H = \frac{1}{K}\sum_k \boldsymbol{\pi}_{h_k}$. If $\chi^2(\boldsymbol{\pi}_f \| \bar{\boldsymbol{\pi}}_H) \le \eta^2$ and $\|\boldsymbol{\pi}_f\|_2^2 \ge \gamma > 0$, then
 \begin{equation}
 \rho_{H,\mathcal{S}} \le \frac{\eta^2}{\gamma}.
+\label{eq:state_mhpr}
 \end{equation}
 Thus MHPR is a consistent proxy for output-level indistinguishability in state space. The bound uses $\chi^2(P\|Q) \coloneqq \sum_i (P_i-Q_i)^2/Q_i$ (the standard definition without the factor $1/2$).
 \end{theorem}
 
-Empirical validation (Appendix~\ref{app:chi2}) confirms $\rho_{H,\mathcal{S}} \le \chi^2/\|\boldsymbol{\pi}_f\|_2^2$ for all gradient-ascent steps. Additional state-space results (quantization error, spectrum bridge, MHPR deviation rate) are deferred to Appendix~\ref{app:bridge}.
+Empirical validation (Appendix~\ref{app:chi2}) confirms the bound of Eq.~\eqref{eq:state_mhpr}, i.e., $\rho_{H,\mathcal{S}} \le \chi^2/\|\boldsymbol{\pi}_f\|_2^2$, for all gradient-ascent steps. Additional state-space results---quantization error (Lemma~\ref{lem:quantization}), spectrum bridge (Theorem~\ref{thm:state_bridge}), and the MHPR deviation rate (Theorem~\ref{thm:softmax_deviation})---are deferred to Appendix~\ref{app:bridge}.
 
 %=============================================================================
 \section{Theoretical Results}
@@ -221,12 +224,7 @@ For class-level forgetting ($D_f$ = all samples of class $c_f$), gradients on $D
 \end{equation}
 At $\theta_0$ (well-trained classifier), $p_f(c_f){\approx}1$ and $p_r(c_r){\approx}1$, so this inner product is $\approx0$. After the $\lambda$ gradient step, logits shift by $O(\lambda)$, and softmax $1$-Lipschitz continuity gives $\|\nabla_z\ell' - \nabla_z\ell\|_2\le\|\Delta z\|_2 = O(\lambda)$. Hence $|\langle\nabla_z\ell'_f,\nabla_z\ell'_r\rangle| = O(\lambda)$, implying the parameter-space cross-covariance $\boldsymbol{\Sigma}_{fr} \coloneqq \operatorname{Cov}(\nabla_\theta\ell_f,\nabla_\theta\ell_r)$ satisfies $\|\boldsymbol{\Sigma}_{fr}\|_F = O(\lambda)$ (Lemma~\ref{lem:cross_cov}, Appendix~\ref{app:finetune}).
 
-Consequently, the class-level bound preserves the $O(\lambda^2)$ rate (Eq.~\eqref{eq:class_finetune}):
-\begin{equation}
-\rho(\theta') \le \frac{\lambda^2 L^2}{2\sigma_1^2}\,\mathrm{Tr}(\boldsymbol{\Sigma}_f) \;+\; O(\lambda^3),
-\label{eq:class_finetune}
-\end{equation}
-where the $O(\lambda^3)$ term absorbs the cross-covariance contribution (Appendix~\ref{app:finetune}). The $O(\lambda^2)$ rate is maintained because $\|\boldsymbol{\Sigma}_{fr}\|_F = O(\lambda)$ adds only a higher-order correction, negligible at practical learning rates ($\lambda{\sim}10^{-5}$).
+Consequently, the class-level bound preserves the $O(\lambda^2)$ rate of Eq.~\eqref{eq:finetune_bound}: its $O(\lambda^3)$ term absorbs the cross-covariance contribution (Appendix~\ref{app:finetune}), and the rate is maintained because $\|\boldsymbol{\Sigma}_{fr}\|_F = O(\lambda)$ adds only a higher-order correction, negligible at practical learning rates ($\lambda{\sim}10^{-5}$).
 
 
 \begin{theorem}[Spectral $\chi^2$–MI Bound]
@@ -293,7 +291,7 @@ Dataset & Method & Acc.(\%) & $\rho$ & MIA(\%) \\
 MNIST & NoUnlearn & 97.45 & $9.762\times10^{-4}$ & 90.4 \\
 \midrule
 CIFAR-10 & NoUnlearn & 76.1 & $1.20\times10^{-3}$ & 90.5 \\
-CIFAR-100 & NoUnlearn & 20.8 & $7.10\times10^{-4}$ & 90.5 \\
+CIFAR-100 (SmallCNN) & NoUnlearn & 20.8 & $7.10\times10^{-4}$ & 90.5 \\
 Fashion-MNIST & NoUnlearn & 88.7 & $2.83\times10^{-4}$ & 90.4 \\
 \bottomrule
 \end{tabular}
@@ -324,7 +322,7 @@ Retrain (oracle) & 80.0 & 65.0 & $\mathbf{8.01{\times}10^{-2}}$ & 2.163 \\
 \par\vspace{2pt}\footnotesize MIA reports the mean next-token NLL (loss gap) of the forget set, \emph{not} an AUC; higher values indicate stronger forgetting.
 \end{table}
 
-\textbf{Accuracy saturates; RII does not.} All three unlearned checkpoints---and the untouched model---answer the forget questions perfectly (Forget$=$100\%; many TOFU answers are recoverable from the question itself, so generation accuracy cannot separate any two methods). RII, by contrast, separates the retraining oracle ($8.01{\times}10^{-2}$) from the untouched model ($1.16{\times}10^{-1}$) by $1.45\times$, with FineTune ranked below NoUnlearn---the same ordering as the vision benchmarks. RII is thus the only metric in our battery that distinguishes \emph{true} removal from no removal in a regime where every accuracy-based signal is saturated at 100\%.
+\textbf{Accuracy saturates; RII does not.} All three unlearned checkpoints---and the untouched model---answer the forget questions perfectly (Forget$=$100\%; many TOFU answers are recoverable from the question itself, so generation accuracy cannot separate any two methods). RII, by contrast, separates the retraining oracle ($8.01{\times}10^{-2}$) from the untouched model ($1.16{\times}10^{-1}$) by $1.45\times$, with FineTune ranked below NoUnlearn---the same ordering as the vision benchmarks. RII is thus the only metric in our battery that distinguishes \emph{true} removal from no removal in a regime where every accuracy-based signal is saturated at 100\%. We do not claim to separate NegGrad from NoUnlearn on RII alone: their gap ($1.7{\times}10^{-3}$) falls inside the evaluation noise (below).
 
 \textbf{The hidden failure of gradient ascent reproduces at 7B scale.} NegGrad attains the \emph{highest} RII ($1.17{\times}10^{-1}$, above NoUnlearn's $1.16{\times}10^{-1}$) while its forget accuracy remains 100\% and its MIA (1.352) is indistinguishable from NoUnlearn (1.348): gradient ascent leaves---if anything, sharpens---the forget set's output signature even in a 7B-parameter language model, exactly the hidden failure documented on CIFAR-10/100 (Section~\ref{sec:benchmark}).
 
@@ -385,11 +383,11 @@ probe & 0.61 & 0.64 & 0.34 & 0.21 & 0.94 & 1.00 \\
 \end{tabular}
 \end{table}
 
-\textbf{Consistency and orthogonality.} RII and MHPR are strongly consistent ($r{=}0.91$) and track forget accuracy ($r{=}0.93$ and $0.87$); RII correlates only moderately with MIA-loss ($r{=}0.81$) and disagrees at the top---NegGrad is worst under RII but second-best under MIA---supporting the orthogonal-axes view (Section~\ref{sec:mia}). Representation MMD correlates with RII at $r{=}0.78$; the full matrix is in Table~\ref{tab:corr}.
+\textbf{Consistency and orthogonality.} RII and MHPR are strongly consistent ($r{=}0.91$) and track forget accuracy ($r{=}0.93$ and $0.87$); the $r{=}0.93$ RII--accuracy correlation is driven by the Retrain endpoint (forget accuracy $0\%$), and among the non-oracle methods the two metrics diverge systematically---NegGrad's forget accuracy \emph{falls} ($67.9\%{\to}63.4\%$) while its RII \emph{rises} ($2.33{\times}10^{-1}{\to}2.54{\times}10^{-1}$)---which is precisely the hidden failure an accuracy proxy would miss. RII correlates moderately-to-strongly with MIA-loss ($r{=}0.81$) and disagrees at the top---NegGrad is worst under RII but second-best under MIA---supporting the orthogonal-axes view (Section~\ref{sec:mia}). Representation MMD correlates with RII at $r{=}0.78$; the full matrix is in Table~\ref{tab:corr}.
 
 \textbf{Representation-level residuals.} A residual linear probe separating forget-class from held-out features succeeds for \emph{all} methods ($\mathrm{AUC}\approx0.92$--$0.98$), including the oracle ($0.959$): output-level erasure coexists with representation-level signatures, consistent with~\cite{cosma2026ruler,yong2026erased} and motivating the two-layer audit (Section~\ref{sec:mia}).
 
-\textbf{Caveats.} (1) SISA's low retain accuracy ($69.9\%$) reflects a light training budget ($5$ shards $\times$ $2$ slices), so its near-zero spectral scores are partly a utility artifact. (2) Absolute MHPR on CIFAR-10 is higher than on MNIST because $\{7,8,9\}$ are not semantically close to cat; MHPR is most discriminative when the held-out reference is representative. (3) MIA-loss AUC is below $0.5$ because cat is harder than the retain classes ($67.9\%$ vs $93.7\%$ forget/retain accuracy); relative ordering is meaningful.
+\textbf{Caveats.} (1) SISA's low retain accuracy ($69.9\%$) reflects a light training budget ($5$ shards $\times$ $2$ slices), so its near-zero spectral scores are partly a utility artifact. (2) Absolute MHPR on CIFAR-10 is higher than on MNIST because $\{7,8,9\}$ are not semantically close to cat; MHPR is most discriminative when the held-out reference is representative. (3) MIA-loss AUC is below $0.5$ because cat is harder than the retain classes ($67.9\%$ vs $93.7\%$ forget/retain accuracy), so the loss threshold separates them in the ``wrong'' direction; relative ordering is meaningful. The extreme value $0.000$ for the Retrain oracle is expected rather than anomalous: since the oracle never trained on cat, its loss on cat exceeds every retain sample, so the loss-based MIA assigns every forget sample to the non-member class---a perfect reverse ranking (AUC${\to}0$) that is itself distributional evidence of successful erasure.
 
 \textbf{Cross-dataset generalization.} Table~\ref{tab:cross} repeats the protocol on Fashion-MNIST with an MLP. RII remains discriminative: the NegGrad failure persists ($\rho{=}0.162$ vs $0.160$), the oracle keeps nonzero RII ($6.54{\times}10^{-2}$), and KED attains the lowest RII. MHPR, however, is non-discriminative without temperature scaling: values span $0.005$--$0.65$, with the oracle ($0.217$) ranked \emph{above} NoUnlearn ($0.005$). This is the subspace-collapse regime of Section~\ref{sec:mhpr}: for a low-accuracy model the held-out means are nearly collinear; the temperature-scaled variant ($T{=}50$ on Fashion-MNIST, $\rho_H{=}0.021$) restores discriminability. Representation probes again saturate near $\mathrm{AUC}{=}1$.
 
@@ -523,7 +521,7 @@ Ascent 10 + FineTune & \textbf{0.221} & 75.2 & 0.52 \\
 \end{tabular}
 \end{table}
 
-\paragraph{Cross-dataset and sensitivity.} $\rho\le2\times10^{-3}$ for $C{=}10$--$100$ (MNIST, CIFAR-10/100), confirming the rank-one property is structural. Under deliberate overfitting (Table~\ref{tab:sensitivity}, Appendix~\ref{app:extra}), $\rho$ surges $10\times$ (MNIST 60K$\to$5K, 50 epochs: $9.8\times10^{-4}\to1.24\times10^{-2}$). The controlled $\alpha$-perturbation confirms orthogonal axes: $\alpha{=}0.20$ raises RII $9\times$ while MIA rises only $6.8$pp. ResNet-18 on CIFAR-100 keeps $\rho{=}1.41\times10^{-3}$ (Table~\ref{tab:resnet18}), confirming architecture independence.
+\paragraph{Cross-dataset and sensitivity.} $\rho\le2\times10^{-3}$ for $C{=}10$--$100$ (MNIST, CIFAR-10/100), confirming the rank-one property is structural. Under deliberate overfitting (Table~\ref{tab:sensitivity}, Sec.~\ref{app:extra}), $\rho$ surges $10\times$ (MNIST 60K$\to$5K, 50 epochs: $9.8\times10^{-4}\to1.24\times10^{-2}$). The controlled $\alpha$-perturbation confirms orthogonal axes: $\alpha{=}0.20$ raises RII $9\times$ while MIA rises only $6.8$pp. ResNet-18 on CIFAR-100 keeps $\rho{=}1.41\times10^{-3}$ (Table~\ref{tab:resnet18}), confirming architecture independence.
 
 \paragraph{Per-sample MHPR gap.} Proposition~\ref{prop:ps_mhpr} predicts $\bar{\rho}_H \ge \|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}}$ (Jensen gap). In our MNIST experiments $\rho_{H,\mathcal{S}}{\approx}0.99999$ and $\bar{\rho}_H{\approx}0.99932$ at baseline, a gap of ${\approx}0.00066$ shrinking to $0.00023$ after 100 gradient steps; larger gaps are expected on more heterogeneous data, making per-sample MHPR more conservative.
 
@@ -615,7 +613,7 @@ $\alpha$ & $\rho$ (RII) & MIA (\%) & Interpretation \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:alpha} confirms the asymmetric response predicted by Theorem~\ref{thm:unified}: as $\alpha$ increases, RII rises $9\times$ while MIA increases only 6.8 percentage points. This asymmetry directly reflects the independent axes of leakage. The same orthogonality appears under real unlearning methods (Section~\ref{sec:benchmark}): RII correlates with MIA-loss at only $r{=}0.81$, and the ranking reverses at the top---NegGrad is worst under RII but second-best under MIA.
+Table~\ref{tab:alpha} confirms the asymmetric response predicted by Theorem~\ref{thm:unified}: as $\alpha$ increases, RII rises $9\times$ while MIA increases only 6.8 percentage points. This asymmetry directly reflects the independent axes of leakage. The same orthogonality appears under real unlearning methods (Section~\ref{sec:benchmark}): RII correlates with MIA-loss at $r{=}0.81$ (moderate-to-strong), and the ranking reverses at the top---NegGrad is worst under RII but second-best under MIA.
 
 
 \paragraph{Beyond output.}
@@ -631,7 +629,7 @@ RII and MHPR are the only metrics that simultaneously satisfy spectral grounding
 
 \textbf{Machine Unlearning.} The field spans exact retraining~\cite{cao2015towards}, SISA~\cite{bourtoule2021machine}, gradient-based reversal~\cite{golatkar2020eternal}, deletion-based approaches~\cite{ginart2019making,sekhari2021remember}, and influence functions~\cite{guo2020certified}. Our contribution is orthogonal to any specific algorithm: an algorithm-agnostic \emph{evaluation metric} measuring output-space irreversibility.
 
-\textbf{Unlearning Evaluation.} Membership inference attacks~\cite{shokri2017membership,carlini2022membership} are the de facto standard, but MIA detects training membership generally rather than forget-set--specific leakage; differential privacy bounds~\cite{guo2020certified} give worst-case guarantees but require invasive training; backdoor audits are attack-dependent. RII is instead a tuning-free spectral certificate of output-level indistinguishability. PSSD (Appendix~\ref{app:pssd}) shares this philosophy: the $\delta(x)$ score is a certificate, not an attack---if $\delta(x)$ is low for all forget samples, no threshold-based MIA can separate them from retain samples, a stronger operational guarantee than empirical attack accuracy.
+\textbf{Unlearning Evaluation.} Membership inference attacks~\cite{shokri2017membership,carlini2022membership} are the de facto standard, but MIA detects training membership generally rather than forget-set--specific leakage; differential privacy bounds~\cite{guo2020certified} give worst-case guarantees but require invasive training; backdoor audits are attack-dependent. RII is instead a tuning-free spectral certificate of output-level indistinguishability. PSSD (Appendix~\ref{app:pssd}) shares this philosophy: the $\delta(x)$ score is a certificate, not an attack---if $\delta(x)$ is low for all forget samples, no threshold-based MIA can separate them from retain samples (Theorem~\ref{thm:pssd_mia}), a stronger operational guarantee than empirical attack accuracy.
 
 \textbf{Verification beyond attacks.} Recent work shows models can pass output-level checks while retaining residual signatures in intermediate representations~\cite{cosma2026ruler,yong2026erased}; representation-level verification~\cite{cosma2026ruler} and general auditing frameworks~\cite{ye2026auditing} address this without shadow models or retraining baselines, while~\cite{zhang2024fragile} shows verification can be circumvented by dishonest providers and~\cite{zheng2026bias} analyzes classification-head bias in class-level unlearning; we refer to~\cite{xue2025verification} for a taxonomy. RII complements these: a purely output-level, tuning-free spectral certificate needing no shadow models or training-time modifications.
 
