@@ -137,6 +137,12 @@ python benchmark_llm_tofu_mlx.py --method retrain
 # NegGrad strength sweep (Sec. 5.3)
 python run_neggrad_scan.py
 
+# MUSE-style long-form book unlearning on LLaMA-2-7B (Table tab:muse)
+python prepare_muse.py               # chunk Alice (forget) / Oz (retain), public domain
+python benchmark_llm_muse.py         # retain = Oz (different-author variant)
+python prepare_muse_glass.py         # chunk Through the Looking-Glass (same-author retain)
+python benchmark_llm_muse_glass.py   # retain = Looking-Glass (Table tab:muse; reuses teacher/NegGrad adapters)
+
 # AG News + DistilBERT pilot (cross-modal evidence)
 python benchmark_nlp.py
 ```
