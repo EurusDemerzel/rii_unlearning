@@ -67,7 +67,7 @@
 
 \textbf{范围。}我们的框架严格在\emph{输出空间}（可观测的预测）内度量不可逆性，这与黑盒 GDPR 合规审计相符。我们不声称参数级白盒安全。我们聚焦于\textbf{类级遗忘}——最严格且最具实践相关性的情形，其中 $D_f$ 由整个语义类的全部样本组成；MHPR（见第~\ref{sec:mhpr}~节）专门处理此处出现的已知/未知类不对称。
 
-框架建立在一个简单观察之上。$2\times C$ \textbf{经验输出通道矩阵} $\mathbf{M}(\theta')$ 的行是 $\boldsymbol{\mu}_f$ 与 $\boldsymbol{\mu}_r$（$D_f$ 与 $D_r$ 上的平均 softmax 向量）。其奇异值 $\sigma_1 \ge \sigma_2$ 编码残差依赖：$\sigma_2 = 0 \iff \mathrm{rank}(\mathbf{M}) = 1 \iff$ 完美移除。
+框架建立在一个基本观察之上。$2\times C$ \textbf{经验输出通道矩阵} $\mathbf{M}(\theta')$ 的行是 $\boldsymbol{\mu}_f$ 与 $\boldsymbol{\mu}_r$（$D_f$ 与 $D_r$ 上的平均 softmax 向量）。其奇异值 $\sigma_1 \ge \sigma_2$ 编码残差依赖：$\sigma_2 = 0 \iff \mathrm{rank}(\mathbf{M}) = 1 \iff$ 完美移除。
 
 \textbf{贡献：}
 \begin{enumerate}

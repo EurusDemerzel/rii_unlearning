@@ -80,7 +80,7 @@ NegGrad 的 RII（$1.17{\times}10^{-1}$）在我们的评估协议下与 NoUnlea
 \subsection{MUSE 风格长文本书籍遗忘上的 RII}
 \label{sec:muse}
 
-TOFU 是基于问答的（共享格式的短提示）。为检验证书在 MUSE~\cite{shi2024muse} 精神下的长文本知识遗忘（模型先记住一本书，然后被要求遗忘它），我们使用公有领域书籍（Project Gutenberg）。遗忘集为《爱丽丝梦游仙境》（Carroll, 1865）；保留集为《镜中世界》（Carroll, 1871），它是同一作者的续作，风格与遗忘文本可比（使用不同作者《绿野仙踪》的变体给出相同的定性结论，见下文）。teacher 为基座 LLaMA-2-7B 加遗忘书籍上的 200 步 LoRA；四种检查点其余与第~\ref{sec:llm}~节相同：NoUnlearn（teacher 原样）、FineTune（保留书籍上 60 步 LoRA）、NegGrad（遗忘书籍上 15 步 LoRA 梯度上升）、Retrain（基座加仅在保留书籍上的 LoRA）。所有文本用 LLaMA-2 tokenizer 分块；留出块（每集 25 个）与训练块不相交。RII 照旧在 $2\times V$ 通道矩阵上计算；遗忘/保留困惑度为平均下一 token NLL 的 $\exp$，MIA 为遗忘集平均 NLL。
+TOFU 是基于问答的（共享格式的短提示）。为检验证书在 MUSE~\cite{shi2024muse} 精神下的长文本知识遗忘（模型先记住一本书，然后被要求遗忘它），我们使用公有领域书籍（Project Gutenberg）。遗忘集为《爱丽丝梦游仙境》（Carroll, 1865）；保留集为《镜中世界》（Carroll, 1871），它是同一作者的续作，风格与遗忘文本可比（使用不同作者《绿野仙踪》的变体给出相同的定性结论，见下文）。teacher 为基座 LLaMA-2-7B 加遗忘书籍上的 200 步 LoRA；四种检查点其余与第~\ref{sec:llm}~节相同：NoUnlearn（teacher 原样）、FineTune（保留书籍上 60 步 LoRA）、NegGrad（遗忘书籍上 15 步 LoRA 梯度上升）、Retrain（基座加仅在保留书籍上的 LoRA）。所有文本用 LLaMA-2 tokenizer 分块；留出块（每集 25 个）与训练块不相交。RII 如第~\ref{sec:llm}~节那样在 $2\times V$ 通道矩阵上计算；遗忘/保留困惑度为平均下一 token NLL 的 $\exp$，MIA 为遗忘集平均 NLL。
 
 \begin{table}[t]
 \centering
