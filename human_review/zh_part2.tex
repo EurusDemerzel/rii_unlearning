@@ -77,33 +77,6 @@ NegGrad 的 RII（$1.17{\times}10^{-1}$）在我们的评估协议下与 NoUnlea
 
 我们还对梯度上升强度（步数 $\times$ 学习率）做扫描，从基线 $10\times 2{\times}10^{-5}$ 到 $30\times 10^{-4}$（$3\times$ 步数，$5\times$ lr）与 $60\times 2{\times}10^{-4}$（$6\times$ 步数，$10\times$ lr），每次都从全新的零 LoRA 出发。在中等强度下，RII 进一步\emph{上升}到 $1.20{\times}10^{-1}$（高于 NoUnlearn 的 $1.16{\times}10^{-1}$），而遗忘/保留准确率保持在 100\%：隐藏失败并不饱和——更强的上升锐化遗忘输出签名。在最强设置下模型开始崩溃：MIA 跳到 5.25（从 1.35），上升损失发散到 6.5，而 RII 回落到 $1.01{\times}10^{-1}$，但生成准确率仍是 100\%，因此仅凭准确率仍无法检测崩溃。此处 RII 下降\emph{是因为输出分布退化为近随机噪声}，这巧合地使两个集合看起来又统计相似；崩溃反而由 MIA 标记。因此 RII 是双向的：它随隐藏失败签名增强而上升，随输出分布本身退化而下降，所以低 RII 必须与效用指标（保留准确率、MIA）一起解读，以区分真擦除与模型崩溃，这与第~\ref{sec:mia}~节的两轴审计一致。
 
-\subsection{MUSE 风格长文本书籍遗忘上的 RII}
-\label{sec:muse}
-
-TOFU 是基于问答的（共享格式的短提示）。为检验证书在 MUSE~\cite{shi2024muse} 精神下的长文本知识遗忘（模型先记住一本书，然后被要求遗忘它），我们使用公有领域书籍（Project Gutenberg）。遗忘集为《爱丽丝梦游仙境》（Carroll, 1865）；保留集为《镜中世界》（Carroll, 1871），它是同一作者的续作，风格与遗忘文本可比（使用不同作者《绿野仙踪》的变体给出相同的定性结论，见下文）。teacher 为基座 LLaMA-2-7B 加遗忘书籍上的 200 步 LoRA；四种检查点其余与第~\ref{sec:llm}~节相同：NoUnlearn（teacher 原样）、FineTune（保留书籍上 60 步 LoRA）、NegGrad（遗忘书籍上 15 步 LoRA 梯度上升）、Retrain（基座加仅在保留书籍上的 LoRA）。所有文本用 LLaMA-2 tokenizer 分块；留出块（每集 25 个）与训练块不相交。RII 如第~\ref{sec:llm}~节那样在 $2\times V$ 通道矩阵上计算；遗忘/保留困惑度为平均下一 token NLL 的 $\exp$，MIA 为遗忘集平均 NLL。
-
-\begin{table}[t]
-\centering
-\small
-\caption{LLaMA-2-7B 上 MUSE 风格长文本书籍遗忘（遗忘：《爱丽丝梦游仙境》；保留：《镜中世界》；基于 LoRA；Retrain 为轻量 60 步 oracle）。}\label{tab:muse}
-\setlength{\tabcolsep}{2pt}
-\begin{tabular}{l c c c c}
-\toprule
-方法 & 遗忘PPL & 保留PPL & RII & MIA \\
-\midrule
-NoUnlearn & 1.97 & 3.39 & $1.18{\times}10^{-2}$ & 0.676 \\
-FineTune & 1.96 & $\mathbf{3.22}$ & $1.05{\times}10^{-2}$ & 0.674 \\
-NegGrad & 1.97 & 3.40 & $1.18{\times}10^{-2}$ & 0.676 \\
-Retrain (oracle) & $\mathbf{2.00}$ & 3.29 & $1.26{\times}10^{-2}$ & $\mathbf{0.691}$ \\
-\bottomrule
-\end{tabular}
-\par\vspace{2pt}\footnotesize 遗忘PPL/保留PPL 为留出块上平均下一 token NLL 的 $\exp$；遗忘困惑度越高表示遗忘越强。MIA 为遗忘集平均下一 token NLL（越高表示遗忘越强）。粗体标记每列最被遗忘的检查点。
-\end{table}
-
-表~\ref{tab:muse} 报告了结果。teacher 确实学会了遗忘书籍：遗忘困惑度从 2.11（基座）降到 1.97，而保留困惑度保持在基座水平附近（3.52 到 3.39）。余量很小，因为这些公有领域书籍已存在于基座模型的预训练语料中——这是使用真实书籍的一个局限。在遗忘下，遗忘困惑度将 Retrain 排序为最强擦除（2.00，最高值），其次为 FineTune（1.96）与 NoUnlearn（1.97）；MIA 一致（Retrain 0.691，其余 0.674--0.676）。NegGrad 是值得注意的结果：15 步上升后——在单独运行中 50 步后——其遗忘困惑度、MIA 与 RII 与 NoUnlearn 在四位有效数字内不可区分（1.97、0.676、$1.18{\times}10^{-2}$）。因此梯度上升在长文本上同样不产生可测量的输出空间擦除，这是第~\ref{sec:llm}~节 TOFU 结果的书籍域类比。FineTune 反而降低保留困惑度（3.39 到 3.22，$-5\%$）同时使遗忘困惑度基本不变（1.97 到 1.96），再次匹配 TOFU 中持续微调保留遗忘流畅度的模式。
-
-原始词表通道上的 RII \emph{无法}分离这些检查点。所有方法落在 $[1.05{\times}10^{-2}, 1.26{\times}10^{-2}]$，未触动基座模型的参考值（$1.34{\times}10^{-2}$）高于其中大多数；按困惑度是最强擦除的 Retrain 反而具有\emph{最高} RII（$1.26{\times}10^{-2}$）。原因是结构性的：遗忘与保留是两本不同的书，因此无论模型记住什么，它们的下一 token 分布都不同——RII 度量的是书籍的固有差异而非遗忘状态。同作者保留将基线减半（从不同作者《绿野仙踪》保留的 $2.58{\times}10^{-2}$ 到《镜中世界》的 $1.34{\times}10^{-2}$），但原始词表通道仍无法对方法排序。这是注记~\ref{rem:channel} 预测的长文本情形：通道语义决定判别力，原始词表通道仅在遗忘与保留集诱导可比输出分布时（如 TOFU 的 QA 对）才具信息量；对不同的书籍，类级输出头（例如书籍分类头）是推荐的审计对象。因此我们报告书籍研究作为 RII 适用处与需要补充处的证据；在两种保留变体上，NegGrad 都与 NoUnlearn 保持不可区分，Retrain 取得最高遗忘困惑度。
-
 \subsection{统一协议下的基准比较}
 \label{sec:benchmark}
 
