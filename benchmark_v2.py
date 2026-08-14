@@ -61,7 +61,11 @@ def load_data(data_root="./data"):
 # ----------------------------------------------------------------------------
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 SEED = 42
+if "--seed" in sys.argv:
+    SEED = int(sys.argv[sys.argv.index("--seed") + 1])
 np.random.seed(SEED); torch.manual_seed(SEED)
+if torch.backends.mps.is_available():
+    torch.mps.manual_seed(SEED)
 
 DS_NAME, MODEL_NAME = "cifar10", "cnn"
 if "--fashion_mnist" in sys.argv:
@@ -74,7 +78,7 @@ RETAIN_CLASSES = [c for c in TRAIN_CLASSES if c != FORGET_CLASS]
 EPOCHS = 10
 LR = 1e-3
 BS = 64
-OUT_DIR = os.path.join("results", f"benchmark_v2_{DS_NAME}")
+OUT_DIR = os.path.join("results", f"benchmark_v2_{DS_NAME}_s{SEED}")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # ----------------------------------------------------------------------------

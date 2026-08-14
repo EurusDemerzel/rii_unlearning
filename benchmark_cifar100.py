@@ -28,13 +28,15 @@ from models import SmallCNN
 
 DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 SEED = 42
+if "--seed" in sys.argv:
+    SEED = int(sys.argv[sys.argv.index("--seed") + 1])
 np.random.seed(SEED); torch.manual_seed(SEED)
 if torch.backends.mps.is_available():
     torch.mps.manual_seed(SEED)
 BS = 64
 EPOCHS = 10
 LR = 1e-3
-OUT = os.path.join("results", "benchmark_cifar100")
+OUT = os.path.join("results", f"benchmark_cifar100_s{SEED}")
 os.makedirs(OUT, exist_ok=True)
 
 MEAN = (0.5071, 0.4867, 0.4408)   # CIFAR-100 mean/std
