@@ -47,7 +47,7 @@
 \begin{abstract}
 \noindent
 \textbf{摘要（逐句对照）：}
-机器学习遗忘旨在无需完全重训练的情况下，从已训练模型中移除特定训练数据的影响；验证这种移除是否成功是一个核心开放问题。成员推理攻击（MIA）将训练/测试分布位移与遗忘集泄漏混为一谈，而差分隐私界要求侵入式训练，因此二者都无法证明输出级不可区分性。我们引入一个基于 $2\times C$ \emph{经验输出通道矩阵}的谱证书，该矩阵的两行分别是遗忘集与保留集上的平均 softmax 预测，并定义 \textbf{残差不可逆指数（Residual Irreversibility Index, RII）} $\rho=1-\sigma_1^2/(\sigma_1^2+\sigma_2^2)$，当两个通道输出分布不可区分时它精确地消失。对于类级遗忘（标准 RII 在此遭受已知/未知类不对称），我们引入 \textbf{多留出投影残差（Multi-Held-Out Projection Residual, MHPR）} $\rho_H$，将遗忘类均值投影到多个留出未见类的子空间上，并给出有限样本保证与面向低精度情形的温度缩放。我们证明 $\rho=0$ 等价于输出通道独立，并导出微调泄漏界、互信息界，以及输出泄漏的统一两轴分解。在跨 CIFAR-10、Fashion-MNIST 与 CIFAR-100（20 类）的统一基准上，以及在标准 TOFU 基准~\cite{maini2024tofu} 与 MUSE 风格长文本书籍遗忘协议上的 70 亿参数语言模型（LLaMA-2-7B，基于 LoRA 的 PEFT）上，RII 在大多数设置中对遗忘方法的排序与已知遗忘强度一致，并在准确率与 MIA 饱和处仍具信息量。当已遗忘检查点将遗忘集生成准确率饱和在 100\% 时，准确率本身无法对它们排序，而 RII 仍将微调排序在未遗忘之下。RII 还揭示出梯度上升的一个隐藏失败：其输出签名在准确率与 MIA 都报告改善的同时反而增强，并伴随一个基于准确率的指标无法发现的微调反弹。在长文本书籍遗忘（MUSE 风格）中，梯度上升使遗忘输出分布保持不变，遗忘困惑度将重训练排序为最强擦除，而原始词表通道携带的是两本书的固有差异而非遗忘状态——这是证书的一个清晰边界，印证通道语义决定其判别力。表示级探针证实输出级擦除可以与特征级签名共存，这促使采用两层审计。
+机器学习遗忘旨在无需完全重训练的情况下，从已训练模型中移除特定训练数据的影响。验证这种移除是否有效仍是一个开放且具有实际重要性的问题。成员推理攻击（MIA）将训练/测试分布位移与遗忘集泄漏混为一谈，而差分隐私界要求侵入式训练，因此二者都无法证明输出级不可区分性。我们引入一个基于 $2\times C$ \emph{经验输出通道矩阵}的谱证书，该矩阵的两行分别是遗忘集与保留集上的平均 softmax 预测，并定义 \textbf{残差不可逆指数（Residual Irreversibility Index, RII）} $\rho=1-\sigma_1^2/(\sigma_1^2+\sigma_2^2)$，当两个通道输出分布不可区分时它精确地消失。对于类级遗忘（标准 RII 在此遭受已知/未知类不对称），我们引入 \textbf{多留出投影残差（Multi-Held-Out Projection Residual, MHPR）} $\rho_H$，将遗忘类均值投影到多个留出未见类的子空间上，并给出有限样本保证与面向低精度情形的温度缩放。我们证明 $\rho=0$ 等价于输出通道独立，并导出微调泄漏界、互信息界，以及输出泄漏的统一两轴分解。在跨 CIFAR-10、Fashion-MNIST 与 CIFAR-100（20 类）的统一基准上，以及在标准 TOFU 基准~\cite{maini2024tofu} 与 MUSE 风格长文本书籍遗忘协议上的 70 亿参数语言模型（LLaMA-2-7B，基于 LoRA 的 PEFT）上，RII 在大多数设置中对遗忘方法的排序与已知遗忘强度一致，并在准确率与 MIA 饱和处仍具信息量。当已遗忘检查点将遗忘集生成准确率饱和在 100\% 时，准确率本身无法对它们排序，而 RII 仍将微调排序在未遗忘之下。RII 还揭示出梯度上升的一个隐藏失败：其输出签名在准确率与 MIA 都报告改善的同时反而增强，并伴随一个基于准确率的指标无法发现的微调反弹。在长文本书籍遗忘（MUSE 风格）中，梯度上升使遗忘输出分布保持不变，遗忘困惑度将重训练排序为最强擦除，而原始词表通道携带的是两本书的固有差异而非遗忘状态，界定了 RII 具有信息量的情形。表示级探针证实输出级擦除可以与特征级签名共存，这促使采用两层审计。
 
 \medskip
 \noindent\textbf{关键词：}秩一通道、机器学习遗忘、奇异值分解、残差不可逆指数、多留出投影、输出空间不可逆性
@@ -63,7 +63,7 @@
 
 具体而言，我们研究的问题是：\emph{能否用一个轻量、黑盒的证书，在类级情形下（即现有指标最不可靠的情形）验证遗忘集与保留集之间的输出级不可区分性？}我们的答案是模型输出通道上的一个谱条件。
 
-我们提出一个基于\textbf{谱条件}的轻量黑盒证书：输出空间不可逆性归结为 $2\times C$ 输出通道矩阵的秩。所谓\textbf{输出分布不可逆性}，我们指遗忘集成员指示变量 $X$ 与模型在参数 $\theta'$ 下的类别输出 $Y$ 条件独立，即 $I(X;Y\mid\theta')=0$。当此成立时，模型在 $D_f$ 与 $D_r$ 上的输出分布在统计上不可区分，产生一个秩一输出通道矩阵且 $\rho=0$。
+我们引入一个基于\textbf{谱条件}的轻量黑盒证书：输出空间不可逆性归结为 $2\times C$ 经验输出通道矩阵的秩。所谓\textbf{输出分布不可逆性}，我们指遗忘集成员指示变量 $X$ 与模型在参数 $\theta'$ 下的类别输出 $Y$ 条件独立，即 $I(X;Y\mid\theta')=0$。当此成立时，模型在 $D_f$ 与 $D_r$ 上的输出分布在统计上不可区分，产生一个秩一输出通道矩阵且 $\rho=0$。
 
 \textbf{范围。}我们的框架严格在\emph{输出空间}（可观测的预测）内度量不可逆性，这与黑盒 GDPR 合规审计相符。我们不声称参数级白盒安全。我们聚焦于\textbf{类级遗忘}——最严格且最具实践相关性的情形，其中 $D_f$ 由整个语义类的全部样本组成；MHPR（见第~\ref{sec:mhpr}~节）专门处理此处出现的已知/未知类不对称。
 
@@ -164,7 +164,7 @@ MHPR 使用 $K \ge 2$ 个留出未见类，并将遗忘类均值投影到它们�
 \paragraph{温度缩放。}
 当 softmax 输出过度集中（准确率 $\lesssim 90\%$）时，留出类均值向量可能近乎共线，将子空间 $\mathcal{S}_K$ 坍缩为一维流形；我们在一次 Fashion-MNIST 运行中观察到这种坍缩（$\rho_H\approx1$），但在三个种子上它是种子依赖的而非系统性的（第~\ref{sec:benchmark}~节）。
 
-一个简单补救是温度缩放：$\mathbf{p}_T(x) = \mathrm{Softmax}(f_{\theta'}(x)/T)$。当 $T\to\infty$ 时，$\mathbf{p}_T \to \mathbf{1}/C$（均匀），留出子空间变得良态。我们选择满足条件数 $\kappa(\mathbf{H}(T)) < 10$ 的最小 $T\in\{1,2,5,10,50,100\}$。在 Fashion-MNIST 上选得 $T=50$（$\rho_H = 0.021$），在 CIFAR-10 上 $T=5$（$\rho_H = 0.025$）。对高精度模型（MNIST，$\sim97.5\%$），$T=1$ 即可；该选择背后的保序性质在命题~\ref{prop:rank_preserve}（附录~\ref{app:temp}）中证明。对 $T$ 的扫描确认该准则不牺牲信号：在 Fashion-MNIST 与 CIFAR-10 上，softmax RII 在 $T{=}5$ 附近达到峰值，并在 $T{=}10$ 时下降一个数量级以上，随 $T\to\infty$ 趋于零，因此在满足条件数约束的温度中，最小的可接受温度也最可判别。
+为缓解输出集中，我们应用温度缩放 $\mathbf{p}_T(x) = \mathrm{Softmax}(f_{\theta'}(x)/T)$：当 $T\to\infty$ 时，$\mathbf{p}_T \to \mathbf{1}/C$（均匀），留出子空间变得良态。我们选择条件数满足 $\kappa(\mathbf{H}(T)) < 10$ 的最小 $T\in\{1,2,5,10,50,100\}$。在 Fashion-MNIST 上选得 $T=50$（$\rho_H = 0.021$），在 CIFAR-10 上 $T=5$（$\rho_H = 0.025$）。对高精度模型（MNIST，$\sim97.5\%$），$T=1$ 即可；该选择背后的保序性质在命题~\ref{prop:rank_preserve}（附录~\ref{app:temp}）中证明。对 $T$ 的扫描确认该准则不牺牲信号：在 Fashion-MNIST 与 CIFAR-10 上，softmax RII 在 $T{=}5$ 附近达到峰值，并在 $T{=}10$ 时下降一个数量级以上，随 $T\to\infty$ 趋于零，因此在满足条件数约束的温度中，最小的可接受温度也最可判别。
 
 \subsection{logit 状态与 softmax RII 的桥接}
 \label{sec:logit_bridge}
@@ -213,7 +213,7 @@ MHPR 命题 & 留出子空间良态（$\sigma_{\min}(\mathbf{H}^*)>0$）；有�
 \end{tabular}
 \end{table}
 
-\textbf{实践有效性。}(i) \emph{sub-Gaussian softmax。}softmax 向量的每个坐标都落在 $[0,1]$ 内，故有界因而 sub-Gaussian：由 Hoeffding 引理，支撑在 $[0,1]$ 上的变量以 $1/4$ 为方差代理，我们用 $\nu=1$ 作为保守上界。因此命题~\ref{prop:confidence} 以显式常数成立且无未知分布参数。(ii) \emph{$\pi_{\min}>0$。}在每一个实验中每个类在保留集上至少出现一次，故经验 $\pi_{\min}\ge 1/N_r>0$；对类数非常多的人群通道，注记~\ref{rem:pi_min} 的截断支撑论证适用。(iii) \emph{$L$-Lipschitz 梯度与 softmax。}softmax 映射对 logit 输入是 $1$-Lipschitz 的，梯度 Lipschitz 常数是损失 Hessian 的谱范数，在本文考虑的（小）参数空间下——尤其 LoRA 适配器只更新少数低秩因子——有界。我们不依赖具体值：定理~\ref{thm:finetune} 的界是小步长时 $\rho=O(\lambda^2)$ 的定性陈述。(iv) \emph{类级遗忘下的交叉协方差。}引理~\ref{lem:cross_cov}（附录~\ref{app:finetune}）依赖不同类别的 logit 梯度在良训练分类器下近似正交，这在分类器自信（$p_f(c_f)\approx1$）时成立；附录给出推导。
+\textbf{实践有效性。}(i) \emph{sub-Gaussian softmax。}softmax 向量的每个坐标都落在 $[0,1]$ 内，故有界因而 sub-Gaussian：由 Hoeffding 引理，支撑在 $[0,1]$ 上的变量以 $1/4$ 为方差代理，我们用 $\nu=1$ 作为保守上界。因此命题~\ref{prop:confidence} 以显式常数成立且无未知分布参数。(ii) \emph{$\pi_{\min}>0$。}在每一个实验中每个类在保留集上至少出现一次，故经验 $\pi_{\min}\ge 1/N_r>0$；对类数很多的人群通道，注记~\ref{rem:pi_min} 的截断支撑论证适用。(iii) \emph{$L$-Lipschitz 梯度与 softmax。}softmax 映射对 logit 输入是 $1$-Lipschitz 的，梯度 Lipschitz 常数是损失 Hessian 的谱范数，在本文考虑的（小）参数空间下——尤其 LoRA 适配器只更新少数低秩因子——有界。我们不依赖具体值：定理~\ref{thm:finetune} 的界是小步长时 $\rho=O(\lambda^2)$ 的定性陈述。(iv) \emph{类级遗忘下的交叉协方差。}引理~\ref{lem:cross_cov}（附录~\ref{app:finetune}）依赖不同类别的 logit 梯度在良训练分类器下近似正交，这在分类器自信（$p_f(c_f)\approx1$）时成立；附录给出推导。
 
 \subsection{伪代码}
 \label{sec:pseudocode}
@@ -305,7 +305,7 @@ I(X; Y \mid \theta') \le \frac{\sigma_1^2}{\pi_{\min}}\cdot\frac{\rho}{1-\rho},
 
 \begin{remark}[关于 $\pi_{\min}>0$]
 \label{rem:pi_min}
-对经验通道，$(\boldsymbol{\mu}_r)_y$ 是类 $y$ 在保留集上的相对频率，因此只要每个类至少出现一次（本文所有实验的情形）就有 $\pi_{\min}>0$。对类数非常多、某些类概率任意小的人群通道，可将该界应用于截断支撑 $\mathcal{Y}_\epsilon=\{y:(\boldsymbol{\mu}_r)_y>\epsilon\}$，代价是 $O(1/\epsilon)$ 的乘法因子；同样的截断出现在置信界中（命题~\ref{prop:confidence}）。
+对经验通道，$(\boldsymbol{\mu}_r)_y$ 是类 $y$ 在保留集上的相对频率，因此只要每个类至少出现一次（本文所有实验的情形）就有 $\pi_{\min}>0$。对类数很多、某些类概率任意小的人群通道，可将该界应用于截断支撑 $\mathcal{Y}_\epsilon=\{y:(\boldsymbol{\mu}_r)_y>\epsilon\}$，代价是 $O(1/\epsilon)$ 的乘法因子；同样的截断出现在置信界中（命题~\ref{prop:confidence}）。
 \end{remark}
 
 \paragraph{信号模型。}
