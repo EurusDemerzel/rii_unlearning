@@ -1,7 +1,8 @@
-\documentclass[smallextended]{svjour3}       % Springer journal template (Applied Intelligence)
-\smartqed                                    % flush right qed marks at end of proofs
+\RequirePackage{fix-cm}
 %
-\usepackage{fix-cm}
+\documentclass[smallextended]{svjour3}       % Springer journal template (Applied Intelligence)
+%
+\smartqed                                    % flush right qed marks at end of proofs
 %
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
@@ -18,10 +19,10 @@
 
 \begin{document}
 
-\title{RII: A Spectral Certificate for Verifying Class-Level Machine Unlearning%
+\title{Spectral Certification for Class-Level Machine Unlearning%
 \thanks{The implementation is available at \protect\url{https://github.com/EurusDemerzel/rii_unlearning}.}%
 }
-\titlerunning{RII: A Spectral Certificate for Unlearning}
+\titlerunning{Spectral Certification for Class-Level Unlearning}
 
 \author{Yan Zhang \and Chenggang Lu%
 \thanks{Corresponding author: Chenggang Lu (\email{luchenggang@zjut.edu.cn}).}%
@@ -178,6 +179,61 @@ Empirical validation (Appendix~\ref{app:chi2}) confirms the bound of Eq.~\eqref{
 \label{sec:theory}
 %=============================================================================
 
+\subsection{Assumptions and Practical Validity}
+\label{sec:assumptions}
+
+Table~\ref{tab:assumptions} lists the assumptions behind each theoretical result and their status in the experimental settings of this paper; we then discuss the assumptions that a reviewer might question.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Assumptions behind each theoretical result and their practical validity in our experimental settings.}\label{tab:assumptions}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{p{2.0cm} p{4.9cm} p{4.8cm}}
+\toprule
+Result & Key assumption & Validity in our settings \\
+\midrule
+Thm.~\ref{thm:perfect} & $Y$ is a class drawn from the softmax distribution $p_c(x;\theta')$, not an argmax label & Holds by construction: all quantities are computed on softmax probability vectors (Sec.~\ref{sec:channel}) \\
+Prop.~\ref{prop:confidence} & Softmax vectors sub-Gaussian with variance proxy $\nu^2$; $\sigma_1>0$ & $p_c\in[0,1]$ is bounded, hence sub-Gaussian with $\nu=1$ (below); $\sigma_1>0$ since rows are nonzero probability vectors \\
+Thm.~\ref{thm:finetune} & $L$-Lipschitz gradient and softmax; small-step condition $\lambda\|\mathbf{g}\|_2=O(1)$ & Bounded in practice, especially under LoRA (small parameter space); $\lambda{\sim}10^{-5}$ satisfies the condition \\
+Thm.~\ref{thm:mi_bound} & $\pi_{\min}=\min_y(\boldsymbol{\mu}_r)_y>0$; equal row norms (relaxed asymptotically) & Empirical channels have $\pi_{\min}\ge 1/N_r>0$ (below); equal-norm is relaxed asymptotically (proof in Appendix~\ref{sec:appendix}) \\
+Thm.~\ref{thm:unified} & Gaussian signal model $R=\alpha X+\beta Y+N$; small $\alpha,\eta$ & An idealization; exact under the model, leading-order otherwise (Remark~\ref{rem:unified_status}) \\
+MHPR props. & Held-out subspace well-conditioned ($\sigma_{\min}(\mathbf{H}^*)>0$); finite-sample concentration & Holds with $K\ge2$ and temperature scaling when the subspace would otherwise collapse (Sec.~\ref{sec:mhpr}) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Validity in practice.} (i) \emph{Sub-Gaussian softmax.} Every coordinate of the softmax vector lies in $[0,1]$, so it is bounded and hence sub-Gaussian: by Hoeffding's lemma a variable supported on $[0,1]$ is sub-Gaussian with variance proxy $1/4$, and we use $\nu=1$ as a conservative upper bound. Proposition~\ref{prop:confidence} therefore holds with explicit constants and no unknown distributional parameters. (ii) \emph{$\pi_{\min}>0$.} In every experiment each class appears at least once on the retain set, so the empirical $\pi_{\min}\ge 1/N_r>0$; for population channels with a very large number of classes the truncated-support argument of Remark~\ref{rem:pi_min} applies. (iii) \emph{$L$-Lipschitz gradient and softmax.} The softmax map is $1$-Lipschitz in its logit input, and the gradient Lipschitz constant is the spectral norm of the Hessian of the loss, which is bounded in the (small) parameter spaces considered here---and especially for LoRA adapters, which update a few low-rank factors. We do not rely on a specific value: the bound of Theorem~\ref{thm:finetune} is the qualitative statement $\rho=O(\lambda^2)$ for small steps. (iv) \emph{Cross-covariance under class-level forgetting.} Lemma~\ref{lem:cross_cov} (Appendix~\ref{app:finetune}) relies on logit gradients of different classes being near-orthogonal at a well-trained classifier, which holds when the classifier is confident ($p_f(c_f)\approx1$); the appendix gives the derivation.
+
+\subsection{Pseudocode}
+\label{sec:pseudocode}
+
+For reproducibility we give the computation of RII, MHPR, and the recommended audit protocol as pseudocode; the implementation is available at \url{https://github.com/EurusDemerzel/rii_unlearning}.
+
+{\small\begin{verbatim}
+Algorithm 1: Compute RII rho
+  Input:  model theta', forget set D_f, retain set D_r
+  1. mu_f <- mean_x in D_f Softmax(f_{theta'}(x))
+  2. mu_r <- mean_x in D_r Softmax(f_{theta'}(x))
+  3. M <- [mu_f ; mu_r]            # 2 x C channel matrix
+  4. sigma_1, sigma_2 <- singular values of M
+  5. rho <- 1 - sigma_1^2/(sigma_1^2 + sigma_2^2)
+  Output: rho
+
+Algorithm 2: Compute MHPR rho_H
+  Input:  model theta', forget set D_f, held-out means H = [mu_h1 ... mu_hK]
+  1. mu_f <- mean_x in D_f Softmax(f_{theta'}(x))
+  2. P <- H^+ H                     # projection onto held-out span
+  3. rho_H <- ||mu_f - P mu_f||^2 / ||mu_f||^2
+  Output: rho_H
+
+Algorithm 3: Recommended audit protocol
+  1. Sample N_min examples from D_f, D_r (and each held-out class for MHPR)
+  2. Compute rho (or rho_H); apply temperature scaling if accuracy <~ 90%
+  3. Report [rho - eps, rho + eps] as a high-probability interval (1 - delta)
+  4. Report MIA AUC alongside RII for a two-axis assessment
+\end{verbatim}}
+
 \begin{theorem}[Output Distributional Irreversibility]
 \label{thm:perfect}
 Let $X\in\{0,1\}$ be the forget-set membership indicator ($X{=}1$ for forget, $X{=}0$ for retain, abbreviated below as $X{=}f$ and $X{=}r$), and let $Y\in\{1,\dots,C\}$ denote the model's categorical output under $\theta'$: for input $x$, the channel emits $Y{=}c$ with probability $p_c(x;\theta')$, so that $P(Y{=}c\mid X{=}f)=(\boldsymbol{\mu}_f)_c$ and $P(Y{=}c\mid X{=}r)=(\boldsymbol{\mu}_r)_c$ by the law of total probability (Remark~\ref{rem:channel}). Then
@@ -239,6 +295,7 @@ where $\pi_{\min} \coloneqq \min_y (\boldsymbol{\mu}_r)_y > 0$ and $(\boldsymbol
 \end{theorem}
 
 \begin{remark}[On $\pi_{\min}>0$]
+\label{rem:pi_min}
 For the empirical channel, $(\boldsymbol{\mu}_r)_y$ is the relative frequency of class $y$ on the retain set, so $\pi_{\min}>0$ holds whenever every class appears at least once---the case in all experiments here. For population channels with a very large number of classes, where some classes may carry arbitrarily small probability, the bound can be applied to the truncated support $\mathcal{Y}_\epsilon=\{y:(\boldsymbol{\mu}_r)_y>\epsilon\}$, paying a multiplicative $O(1/\epsilon)$ factor; the same truncation appears in the confidence bounds (Proposition~\ref{prop:confidence}).
 \end{remark}
 
@@ -261,6 +318,7 @@ where $I_{\mathrm{dir}} \propto \alpha^2$ (direct leakage, measured by MIA) and 
 \end{theorem}
 
 \begin{remark}[Status of Theorem~\ref{thm:unified}]
+\label{rem:unified_status}
 The decomposition is exact under the Gaussian signal model and holds to leading order in $\alpha^2+\eta^2$ under the regularity of Lemma~\ref{lem:fisher} (small $\alpha$, small spectral deviation); we state it as a theorem for readability, with a proof sketch in Appendix~\ref{app:unified} and the full $\chi^2$ control in Appendix~\ref{app:bridge_proofs}.
 \end{remark}
 
@@ -281,7 +339,7 @@ The discrete $2\times C$ analysis lifts to continuous spaces via Hilbert--Schmid
 
 \textbf{Unlearning methods:} NoUnlearn (no removal), Retrain (gold standard), SISA~\cite{bourtoule2021machine} ($S{=}5$ shards), NegGrad (gradient ascent on $D_f$ only), FineTune (gradient ascent on $D_f$ followed by descent on $D_r$), KED (knowledge erosion via KL-to-uniform on $D_f$), and BadTeacher (wrong-label training on $D_f$).
 
-\textbf{Benchmark protocol.} In Section~\ref{sec:benchmark} we adopt a standard class-level protocol on CIFAR-10: the model is trained on classes $\{0,\dots,6\}$, class~3 (cat) is the forget set, and classes $\{7,8,9\}$ are held out as unseen MHPR references ($K{=}3$). Models are trained without data augmentation for determinism, and every unlearning method is evaluated with the \emph{same} battery of metrics.
+\textbf{Benchmark protocol.} In Section~\ref{sec:benchmark} we adopt a standard class-level protocol on CIFAR-10: the model is trained on classes $\{0,\dots,6\}$, class~3 (cat) is the forget set, and classes $\{7,8,9\}$ are held out as unseen MHPR references ($K{=}3$). Fashion-MNIST uses the identical protocol: seven training classes $\{0,\dots,6\}$, forget class~3 (Dress), and held-out classes $\{7,8,9\}$ (Sneaker, Bag, Ankle boot). Held-out classes are the remaining classes after the training split in both cases---chosen for availability rather than semantic similarity; the effect of this choice is discussed in Section~\ref{sec:benchmark} (Caveats~(2)). Models are trained without data augmentation for determinism, and every unlearning method is evaluated with the \emph{same} battery of metrics.
 
 The abbreviation ``MIA'' denotes three distinct protocols across the paper, and each table states its own: train/test membership-inference accuracy in the random-forgetting baseline (Table~\ref{tab:main}); a forget/retain loss-threshold AUC in the class-level benchmark (Table~\ref{tab:benchmark}); and the forget-set mean next-token NLL on TOFU (Table~\ref{tab:llm}). Where the two leakage axes are contrasted (Sec.~\ref{sec:mia}), ``MIA'' refers to the train/test membership accuracy.
 
@@ -504,7 +562,13 @@ $K$ & $\rho_{\mathrm{std}}$ & $\rho_{\mathrm{LOCO}}$ & $\rho_H$ \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:mhpr} compares MHPR with LOCO. MHPR projects the forgotten class mean onto the span of $K$ held-out unseen classes (Sec.~\ref{sec:mhpr}); on MNIST class forgetting, $K\ge3$ resolves the LOCO failure: $K{=}1$ gives $\rho_H{=}0.942$ (worse than LOCO, as a single reference misses the unseen-class manifold), while $K{=}3$ drops $\rho_H$ to $0.046$, an order of magnitude below $\rho_{\mathrm{std}}{=}0.136$ and $\rho_{\mathrm{LOCO}}{=}0.310$. $K{=}4$ reaches $0.0008$ (near machine zero) but costs training data (accuracy $79.5\%{\to}48.7\%$). We recommend $K{=}3$.
+Table~\ref{tab:mhpr} compares MHPR with LOCO. MHPR projects the forgotten class mean onto the span of $K$ held-out unseen classes (Sec.~\ref{sec:mhpr}); on MNIST class forgetting, $K\ge3$ resolves the LOCO failure: $K{=}1$ gives $\rho_H{=}0.942$ (worse than LOCO, as a single reference misses the unseen-class manifold), while $K{=}3$ drops $\rho_H$ to $0.046$, an order of magnitude below $\rho_{\mathrm{std}}{=}0.136$ and $\rho_{\mathrm{LOCO}}{=}0.310$. $K{=}4$ reaches $0.0008$ (near machine zero) but costs training data (accuracy $79.5\%{\to}48.7\%$). We recommend $K{=}3$. Figure~\ref{fig:k_ablation} shows the same trend graphically.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.78\textwidth]{figures/k_ablation.pdf}
+\caption{MHPR as a function of the number of held-out classes $K$ (MNIST class forgetting, forget class~5, log scale). $\rho_H$ drops by two orders of magnitude at $K{=}3$ and approaches machine zero at $K{=}4$, while the standard and LOCO RII baselines remain near $0.14$ and $0.31$ (Table~\ref{tab:mhpr}).}\label{fig:k_ablation}
+\end{figure}
 
 Cross-dataset, adaptive temperature scaling extends MHPR to low-accuracy regimes where the held-out subspace would otherwise collapse. On Fashion-MNIST ($88.7\%$ accuracy), $T{=}50$ reduces $\rho_H$ from $\sim1$ to $0.021$; on CIFAR-10 ($75\%$), $T{=}5$ gives $\rho_H{=}0.025$. These compare favorably to the class-level RII baselines ($1.60{\times}10^{-1}$ and $2.33{\times}10^{-1}$ for Fashion-MNIST and CIFAR-10, Table~\ref{tab:cross}).
 
@@ -673,7 +737,12 @@ Class-level unlearning verification sits between two failure modes: accuracy-bas
 
 \textbf{Limitations.} The certificate is output-level by construction: it does not bound leakage in internal representations, which the probe experiments show can persist even for the retraining oracle, and it does not certify parameter-level privacy. The class-level studies are single-run (training cost), so their ranking conclusions are indicative rather than statistically tested; seed stability on the random baseline (10 seeds) and the 7B study (3 subsamples) supports the metric's stability but does not transfer to statistical significance for the class-level rankings. The AG News and 0.5B results are single-run pilot observations reported as transfer evidence rather than full benchmarks. The MI bound requires $\pi_{\min}>0$, and the unified decomposition is exact under the Gaussian signal model, holding to leading order more generally.
 
+\textbf{Practical guidance.} RII alone should not be used to declare unlearning successful in an audit. Because the certificate is output-level and can be driven toward zero by model degeneration as well as by erasure, we recommend reporting it alongside: (i) a utility check (retain accuracy, and forget accuracy where available) to distinguish true erasure from collapse; (ii) an MIA score (forget/retain loss AUC, or train/test membership accuracy as appropriate) for the direct leakage axis; (iii) an internal-representation probe (MMD or a residual linear probe on penultimate features) to catch representation-level signatures; and (iv) MHPR when held-out reference classes are available. This two-layer, two-axis audit is what Section~\ref{sec:mia} formalizes.
+
 \textbf{Future work.} Directions include a formal DP--RII connection, extending the author-level TOFU study to the full benchmark suite (forget 90/95/99, Truth Ratio and KLR~\cite{maini2024tofu}) and to MUSE~\cite{shi2024muse}, class-level output channels (e.g.\ author-classification heads) for language models, the multi-layer state-trajectory extension of PSSD (Appendix~\ref{app:pssd}), combining RII with internal representation audits for full white-box certification, ImageNet-scale validation, and---when semantically matched held-out classes are unavailable---constructing MHPR reference subspaces from synthetic or generative reference distributions.
+
+\section*{Conflict of interest}
+The authors declare that they have no conflict of interest.
 
 %=============================================================================
 \appendix
@@ -862,7 +931,7 @@ and $\|\Delta\boldsymbol{\mu}_r\|_2\le\lambda L\|\mathbf{g}\|_2$ for retain samp
 Using $\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2=\sqrt{2}\sigma_2$ and $\rho\approx\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2/(2\sigma_1^2)$ for $\rho\ll1$ yields $\rho(\theta')\le\frac{\lambda^2L^2}{2\sigma_1^2}\mathrm{Tr}(\boldsymbol{\Sigma}_f)+O(\lambda^3)$. For class-level forgetting the cross-term $\mathbb{E}[\langle\Delta\boldsymbol{\mu}_f,\Delta\boldsymbol{\mu}_r\rangle]=\lambda^2\mathrm{Tr}(\boldsymbol{\Sigma}_{fr})+O(\lambda^3)$ is $O(\lambda^3)$ by Lemma~\ref{lem:cross_cov}, preserving the $O(\lambda^2)$ rate.
 \end{proof}
 
-\subsection{Proof Sketch of Theorem~\ref{thm:unified} (Unified Decomposition)}
+\subsection{Proof of Theorem~\ref{thm:unified} (Unified Decomposition)}
 \label{app:unified}
 \begin{proof}
 By the chain rule, $I(X;R) \le I(X;Y) + I(X;R\mid Y)$. For the cover term, the Hilbert--Schmidt decomposition $f_{Y|X}(y|x) = f_Y(y) + \sum_{k\ge 2}\sigma_k\phi_k(y)\psi_k(x)$ gives $\chi^2(P_{Y|X=x}\|P_Y)=\int\frac{(\sum_{k\ge2}\sigma_k\phi_k(y)\psi_k(x))^2}{f_Y(y)}\,dy=\sum_{k\ge2}\sigma_k^2\psi_k(x)^2$; averaging over $X$ and using $\mathbb{E}_X[\psi_k(X)^2]=1$ yields $\mathbb{E}_X[\chi^2(P_{Y|X}\|P_Y)] = \sum_{k\ge 2}\sigma_k^2 = \eta^2$. Since $D_{\mathrm{KL}} \le \chi^2$, we have $I(X;Y) \le \eta^2$. For the direct term, conditioned on $Y=y$, $R = \alpha X + \beta y + N$. By Lemma~\ref{lem:fisher} (Fisher information expansion), $I(X;R\mid Y) = \frac{\alpha^2}{2\sigma^2}\operatorname{Var}(X) + o(\alpha^2)$. Summing yields the decomposition.
@@ -1000,83 +1069,74 @@ As $T\to\infty$, $\mathbf{p}_T\to\mathbf{1}/C$ and $\rho_T\to0$; the convergence
 \end{proof}
 
 %=============================================================================
-% REFERENCES
+% EXPERIMENTAL DETAILS APPENDIX
 %=============================================================================
-\begin{thebibliography}{99}
-\bibitem{bourtoule2021machine}
-Bourtoule L, Chandrasekaran V, Choquette-Choo C A, et al (2021) Machine unlearning. In: 2021 IEEE Symposium on Security and Privacy (SP), IEEE
+\section{Experimental Details and MIA Protocols}
+\label{app:details}
 
-\bibitem{nguyen2025survey}
-Nguyen T T, Huynh T T, Ren Z, et al (2025) A survey of machine unlearning. ACM Transactions on Intelligent Systems and Technology 16(5):1-46. doi:10.1145/3749987
+\subsection{Visual benchmarks}
 
-\bibitem{cosma2026ruler}
-Cosma G, Finke A (2026) RULER: representation-level verification of machine unlearning. arXiv:2605.27569
+Table~\ref{tab:exp_vision} summarizes the visual-benchmark configuration; all runs use a fixed seed (42), no data augmentation, and plain per-channel normalization (CIFAR-10: mean $(0.4914,0.4822,0.4465)$, std $(0.2023,0.1994,0.2010)$; Fashion-MNIST/MNIST: mean $0.2860$, std $0.3530$).
 
-\bibitem{yong2026erased}
-Yong T P Y, Ong W K, Chan C S (2026) Erased, but not gone: output forgetting is not true forgetting. arXiv:2606.25001
+\begin{table}[t]
+\centering
+\small
+\caption{Visual-benchmark configuration. ``Class-level'' denotes the protocol of Section~\ref{sec:benchmark}.}
+\label{tab:exp_vision}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l l c c c c}
+\toprule
+Dataset & Architecture & Optimizer & lr & batch & epochs \\
+\midrule
+MNIST & SimpleMLP (784$\to$128$\to$10) & Adam & $10^{-3}$ & 64 & 10 \\
+Fashion-MNIST & MLP & Adam & $10^{-3}$ & 64 & 10 \\
+CIFAR-10 & SmallCNN (3 conv + 2 fc) & Adam & $10^{-3}$ & 64 & 10 \\
+CIFAR-100 & SmallCNN / ResNet-18 & Adam & $10^{-3}$ & 64 & 10 \\
+MNIST (overfit) & DeepMLP & Adam & $10^{-3}$ & 64 & 50 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\bibitem{sanh2020distilbert}
-Sanh V, Debut L, Chaumond J, Wolf T (2019) DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter. arXiv:1910.01108
+The random-forgetting baseline (Table~\ref{tab:main}) drops a random 5\% subset; the class-level protocol trains on $\{0,\dots,6\}$ with forget class~3 and held-out classes $\{7,8,9\}$ (CIFAR-10 and Fashion-MNIST), and on a 20-class CIFAR-100 subset with forget class~3 and held-out $\{20,21,22\}$. All experiments run on an Apple Silicon machine (M5 Pro, 24~GB unified memory) with MPS acceleration; the largest visual model (ResNet-18 on CIFAR-100) trains in minutes, so no GPU cluster is required.
 
-\bibitem{qwen2024qwen2}
-Qwen Team (2024) Qwen2.5 technical report. arXiv:2412.15115
+\subsection{Language-model experiments}
 
-\bibitem{maini2024tofu}
-Maini P, Feng Z, Schwarzschild A, Lipton Z C, Kolter J Z (2024) TOFU: a task of fictitious unlearning for LLMs. In: Proceedings of the First Conference on Language Modeling (COLM)
+Table~\ref{tab:exp_llm} summarizes the LLM configuration. The TOFU~\cite{maini2024tofu} author-level protocol uses one forget author (40 QA pairs) and the 90-author retain split; evaluation uses 20 forget and 40 retain QA pairs with a maximum sequence length of 384, repeated over three random evaluation subsamples. LoRA (rank 8, scale 20, dropout 0) is applied to 8 of 32 layers.
 
-\bibitem{shokri2017membership}
-Shokri R, Stronati M, Song C, Shmatikov V (2017) Membership inference attacks against machine learning models. In: 2017 IEEE Symposium on Security and Privacy (SP), IEEE
+\begin{table}[t]
+\centering
+\small
+\caption{Language-model configuration.}
+\label{tab:exp_llm}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l l l l}
+\toprule
+Experiment & Model & PEFT & Unlearning recipe \\
+\midrule
+TOFU 7B & LLaMA-2-7B (TOFU ckpt) & LoRA $r{=}8$, scale 20, 8/32 layers & NoUnlearn: ckpt as-is; FineTune: AdamW $10^{-5}$, 60 steps, batch 1; NegGrad: SGD $2{\times}10^{-5}$, 10 steps; Retrain: base + LoRA on retain, 60 steps \\
+TOFU 0.5B & Qwen2.5-0.5B & full fine-tune & AdamW $5{\times}10^{-5}$; FineTune 40 steps, NegGrad 8 steps, batch 4 \\
+AG News & DistilBERT & full fine-tune & Adam $2{\times}10^{-5}$, 2 epochs, batch 32; 4000 train / 1500 eval per class; forget class = World news \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\bibitem{guo2020certified}
-Guo C, Goldstein T, Hannun A, van der Maaten L (2020) Certified data removal from machine learning models. In: Proceedings of the 37th International Conference on Machine Learning (ICML), PMLR
+The NegGrad strength sweep (Section~\ref{sec:llm}) varies steps $\times$ learning rate from the baseline $(10, 2{\times}10^{-5})$ to $(30, 10^{-4})$ ($3\times$ steps, $5\times$ lr) and $(60, 2{\times}10^{-4})$ ($6\times$ steps, $10\times$ lr), always from a fresh zero LoRA.
 
-\bibitem{sommer2022towards}
-Sommer D M, Song L, Wagh S, Mittal P (2022) Athena: probabilistic verification of machine unlearning. Proceedings on Privacy Enhancing Technologies 2022(3):268-290
+\subsection{Membership inference attack details}
+\label{app:mia}
 
-\bibitem{ye2026auditing}
-Ye D, Zhu T, Huang R, et al (2026) Auditing machine unlearning: a systematic research on whether models truly forget. arXiv:2606.16110
+Two distinct MIA protocols appear in this paper, as stated by each table's caption and by the ``Notation for MIA'' paragraph in the Setup of Section~\ref{sec:experiments}.
 
-\bibitem{cao2015towards}
-Cao Y, Yang J (2015) Towards making systems forget with machine unlearning. In: 2015 IEEE Symposium on Security and Privacy (SP), IEEE
+\textbf{Loss-threshold AUC (class-level benchmark, Table~\ref{tab:benchmark}).} For each forget and retain sample we compute the model's cross-entropy loss; the score of every sample is its loss, and the reported MIA-loss is the AUC obtained by thresholding these scores (forget samples are the positive class). No shadow model or retraining is involved: the target model is evaluated directly. Because the forget class is an unseen class in the training protocol, its losses exceed those of retain samples, giving the ``reverse'' ordering discussed in Section~\ref{sec:benchmark} (the oracle attains AUC${\to}0$, which is itself evidence of successful erasure).
 
-\bibitem{golatkar2020eternal}
-Golatkar A, Achille A, Soatto S (2020) Eternal sunshine of the spotless net: selective forgetting in deep networks. In: 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), IEEE
+\textbf{Train/test membership accuracy (random baseline, Table~\ref{tab:main}).} We score each sample by its softmax confidence (or, equivalently, negative loss) and classify training vs.\ test membership by thresholding; the reported value is the average membership accuracy over the two classes. This measures general memorization (the train/test confidence gap), which is orthogonal to forget/retain indistinguishability (Section~\ref{sec:mia}).
 
-\bibitem{ginart2019making}
-Ginart A, Guan M Y, Valiant G, Zou J (2019) Making AI forget you: data deletion in machine learning. In: Advances in Neural Information Processing Systems 32 (NeurIPS)
+\textbf{Why a simple attack suffices.} The goal of this paper is to rank unlearning methods, not to maximize attack success, and the certificate RII is a distributional quantity rather than an adversarial bound. Stronger attacks such as LiRA or the first-principles analyses of Carlini et al.~\cite{carlini2022membership} require shadow models or repeated training runs; under a unified single-model protocol the added power does not change the relative ranking of methods, because the output-level signal available to any black-box attacker is the same per-sample loss or confidence that the simple threshold attacks use. We therefore report the simple attacks and leave stronger-attack comparisons to future work.
 
-\bibitem{sekhari2021remember}
-Sekhari A, Acharya J, Kamath G, Suresh A T (2021) Remember what you want to forget: algorithms for machine unlearning. In: Advances in Neural Information Processing Systems 34 (NeurIPS)
-
-\bibitem{carlini2022membership}
-Carlini N, Chien S, Nasr M, et al (2022) Membership inference attacks from first principles. In: 2022 IEEE Symposium on Security and Privacy (SP), IEEE
-
-\bibitem{zhang2024fragile}
-Zhang B, Chen Z, Shen C, Li J (2024) Verification of machine unlearning is fragile. In: Proceedings of the 41st International Conference on Machine Learning (ICML), PMLR
-
-\bibitem{zheng2026bias}
-Zheng W, Chen K, Guo Y, Xiao Y (2026) Classification-head bias in class-level machine unlearning: diagnosis, mitigation, and evaluation. arXiv:2605.08730
-
-\bibitem{xue2026verification}
-Xue L, Hu S, Lu W, et al (2026) Towards reliable forgetting: a survey on machine unlearning verification. ACM Computing Surveys 58(12):1-35. doi:10.1145/3807451
-
-\bibitem{shannon1949communication}
-Shannon C E (1949) Communication theory of secrecy systems. Bell System Technical Journal 28(4):656-715
-
-\bibitem{bloch2021overview}
-Bloch M, G\"unl\"u O, Yener A, et al (2021) An overview of information-theoretic security and privacy: metrics, limits and applications. IEEE Journal on Selected Areas in Information Theory 2(1)
-
-\bibitem{shi2024muse}
-Shi W, Lee J, Huang Y, et al (2024) MUSE: machine unlearning six-way evaluation for language models. arXiv:2407.06460
-
-\bibitem{vershynin2018high}
-Vershynin R (2018) High-Dimensional Probability: An Introduction with Applications in Data Science. Cambridge University Press, Cambridge
-
-\bibitem{stewart1990matrix}
-Stewart G W, Sun J (1990) Matrix Perturbation Theory. Academic Press, Boston
-
-\bibitem{kumar2010clustering}
-Kumar A, Kannan R (2010) Clustering with spectral norm and the k-means algorithm. In: 2010 IEEE 51st Annual Symposium on Foundations of Computer Science (FOCS), IEEE
-\end{thebibliography}
+%=============================================================================
+% REFERENCES (BibTeX, spmpsci style)
+%=============================================================================
+\bibliographystyle{spmpsci}      % Springer math & physical sciences style
+\bibliography{references}
 
 \end{document}

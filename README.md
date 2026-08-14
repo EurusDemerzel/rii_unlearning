@@ -1,4 +1,4 @@
-# rii_unlearning: A Spectral Criterion for Machine Unlearning
+# Spectral Certification for Class-Level Machine Unlearning
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -6,7 +6,7 @@
 
 Official implementation of the **Residual Irreversibility Index (RII)** — a spectral certificate for quantifying output-space irreversibility in class-level machine unlearning.
 
-**Paper**: *"RII: A Spectral Certificate for Verifying Class-Level Machine Unlearning"*  
+**Paper**: *"Spectral Certification for Class-Level Machine Unlearning"*  
 **Submitted to**: Applied Intelligence (Springer)
 
 **Code**: [GitHub](https://github.com/EurusDemerzel/rii_unlearning) | [Gitee](https://gitee.com/peregrine_eurus/rii_unlearning)
@@ -15,7 +15,7 @@ Official implementation of the **Residual Irreversibility Index (RII)** — a sp
 
 ## Overview
 
-The central object is a **$2 \times C$ empirical confusion matrix** whose rows are the averaged softmax predictions on the forget set $D_f$ and retain set $D_r$. We define the **Residual Information Index (RII)**:
+The central object is a **$2 \times C$ empirical output channel matrix** whose rows are the averaged softmax predictions on the forget set $D_f$ and retain set $D_r$. We define the **Residual Irreversibility Index (RII)**:
 
 $$\rho = 1 - \frac{\sigma_1^2}{\sigma_1^2 + \sigma_2^2} \in [0, 0.5]$$
 
@@ -108,26 +108,55 @@ one_rank/
 
 ## Reproducing the Paper
 
-### Training + Evaluation
+### Visual benchmarks (CIFAR-10, Fashion-MNIST, CIFAR-100)
 
 ```bash
-# Activate environment
 source venv/bin/activate
 
-# Run core experiments
-python run_fashion_mnist.py          # Fashion-MNIST (Section VI)
-python run_multi_heldout_projection.py  # MHPR evaluation (Section VI)
-python run_cifar100_long.py          # CIFAR-100 200-epoch (Section VI)
-python run_cifar10_multi_class_forget.py  # CIFAR-10 class forgetting
-python run_abcde.py                  # Supplemental experiments A-E
+# CIFAR-10 class-level benchmark (7 methods, Table tab:benchmark)
+python benchmark_v2.py --seed 0
+
+# Fashion-MNIST cross-dataset benchmark (Table tab:cross)
+python benchmark_v2.py --fashion_mnist --seed 0
+
+# CIFAR-100 class-level benchmark (Table tab:cifar100)
+python benchmark_cifar100.py --seed 0
+
+# MNIST MHPR evaluation and K-ablation (Table tab:mhpr, Fig. k_ablation)
+python run_multi_heldout_projection.py
 ```
 
-### Compiling the Paper
+### Language-model experiments
 
 ```bash
-pdflatex main1.tex
-bibtex main1
-pdflatex main1.tex
+# TOFU author-level on LLaMA-2-7B (Table tab:llm) — requires mlx + mlx-lm
+python benchmark_llm_tofu_mlx.py --method fine_tune
+python benchmark_llm_tofu_mlx.py --method neggrad
+python benchmark_llm_tofu_mlx.py --method retrain
+
+# NegGrad strength sweep (Sec. 5.3)
+python run_neggrad_scan.py
+
+# AG News + DistilBERT pilot (cross-modal evidence)
+python benchmark_nlp.py
+```
+
+### Compiling the paper (Springer svjour3 template)
+
+```bash
+cd ai_submission
+pdflatex manuscript.tex
+bibtex manuscript
+pdflatex manuscript.tex
+pdflatex manuscript.tex
+```
+
+## Environment
+
+- Python 3.10+, PyTorch 2.0+ (MPS or CUDA)
+- `requirements.txt` — vision experiments
+- `mlx` + `mlx-lm` — LLM experiments (Apple Silicon)
+- `environment.yml` (conda) mirrors the above
 pdflatex main1.tex
 ```
 
@@ -151,7 +180,7 @@ If you use this code in your research, please cite our paper:
 
 ```bibtex
 @article{zhang2026spectral,
-  title={RII: A Spectral Certificate for Verifying Class-Level Machine Unlearning},
+  title={Spectral Certification for Class-Level Machine Unlearning},
   author={Zhang, Yan and Lu, Chenggang},
   journal={Applied Intelligence},
   year={2026},
