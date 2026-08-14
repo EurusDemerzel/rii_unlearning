@@ -72,10 +72,10 @@
 \textbf{贡献：}
 \begin{enumerate}
 \item 一个输出谱框架（第~\ref{sec:channel}~节）：一个 $2\times C$ 通道矩阵，其秩一条件给出无需调参的残差不可逆指数（RII）。
-\item 一个证明（定理~\ref{thm:perfect}）：$\rho=0$ 当且仅当 $I(X;Y\mid\theta')=0$，论证是通道级的，无需指数族或校准假设。
+\item 一个证明（定理~\ref{thm:perfect}）：在\emph{通道}层面，$\rho=0$ 当且仅当 $I(X;Y\mid\theta')=0$，无需指数族或校准假设；逐样本输出分布刻意不在范围之内。
 \item 面向类级遗忘的 MHPR（第~\ref{sec:mhpr}~节）：一种多留出投影，在很大程度上解决已知/未知类不对称（将 oracle 的残差降到远低于其标准 RII 水平），并附带温度缩放与有限样本保证。
 \item 理论保证（第~\ref{sec:theory}~节）：置信界、$O(\lambda^2)$ 微调泄漏界、谱互信息界，以及将输出泄漏分解为两个正交轴的统一分解。
-\item 对 RII 与 MHPR 在统一七方法基准以及 TOFU 与 MUSE 风格书籍遗忘基准的 70 亿参数语言模型上的评估（第~\ref{sec:experiments}~节），揭示准确率与 MIA 都会错过的隐藏失败（梯度上升签名增强与微调反弹）；在 TOFU 上，RII 对生成准确率饱和于 100\% 的已遗忘检查点进行排序，而准确率本身不提供任何排序，且在长文本书籍遗忘中梯度上升同样使遗忘输出分布保持不变。我们还给出 $O(CN)$ 审计协议与逐样本扩展，逐样本状态差异（Per-Sample State Disparity, PSSD；附录~\ref{app:pssd}）。
+\item 对 RII 与 MHPR 在统一七方法基准以及 TOFU 与 MUSE 风格书籍遗忘基准的 70 亿参数语言模型上的评估（第~\ref{sec:experiments}~节），揭示准确率与 MIA 都会错过的隐藏失败（梯度上升签名增强与微调反弹）；在 TOFU 上，RII 对生成准确率饱和于 100\% 的已遗忘检查点进行排序，而准确率本身不提供任何排序，且在长文本书籍遗忘中梯度上升同样使遗忘输出分布保持不变。我们还给出 $O(CN)$ 审计协议；逐样本精化（PSSD）在附录~\ref{app:pssd} 中给出。
 \end{enumerate}
 
 % =============================================================================
@@ -86,7 +86,7 @@
 
 \subsection{问题设置}
 
-设 $D = \{(x_i, y_i)\}_{i=1}^N$ 为训练集，$\theta_0 = \mathcal{A}(D)$ 为训练所得参数，$D_f \subset D$ 为遗忘集，$D_r = D \setminus D_f$ 为保留集，并令 $N_f = |D_f|$、$N_r = |D_r|$。遗忘算法 $\mathcal{U}$ 产生 $\theta' = \mathcal{U}(\theta_0, D_f, D_r)$。我们通过输出分布来量化残差依赖 $I(D_f; \theta' \mid \theta_0)$。
+设 $D = \{(x_i, y_i)\}_{i=1}^N$ 为训练集，$\theta_0 = \mathcal{A}(D)$ 为训练所得参数，$D_f \subset D$ 为遗忘集，$D_r = D \setminus D_f$ 为保留集，并令 $N_f = |D_f|$、$N_r = |D_r|$。遗忘算法 $\mathcal{U}$ 产生 $\theta' = \mathcal{U}(\theta_0, D_f, D_r)$。我们通过模型诱导的输出分布来评估 $D_f$ 的残差影响。
 
 我们聚焦于\textbf{类级遗忘}，其中 $D_f$ 由整个语义类的全部样本组成。这一情形暴露出样本级遗忘可能掩盖的谱结构。
 
@@ -126,7 +126,7 @@
 
 性质：(i) $\rho = 0 \iff \sigma_2 = 0 \iff \boldsymbol{\mu}_f = \boldsymbol{\mu}_r$（完美遗忘）；(ii) 当 $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$ 且 $\boldsymbol{\mu}_f \perp \boldsymbol{\mu}_r$ 时 $\rho = 0.5$；(iii) 尺度不变；(iv) 当 $\rho \ll 1$ 时 $\rho \approx \sigma_2^2/\sigma_1^2$。
 
-定义~\ref{def:rii}（式~\eqref{eq:rho}）将 $\rho$ 定义为一种谱残差能量（输出通道的归一化第二奇异值），而非互信息值。其信息论含义由定理~\ref{thm:mi_bound} 确立：当 $\rho\ll1$ 时 $I(X;Y\mid\theta')\le O(\rho)$，因此 $\rho$ 在互信息消失时精确消失，并在小泄漏时上界它。
+定义~\ref{def:rii}（式~\eqref{eq:rho}）将 $\rho$ 定义为一种谱残差能量（输出通道的归一化第二奇异值），而非互信息值。其与互信息的联系由定理~\ref{thm:mi_bound} 确立：当 $\rho\ll1$ 时 $I(X;Y\mid\theta')\le O(\rho)$，因此 $\rho$ 在互信息消失时精确消失，并在小泄漏时从上方界定它。
 
 \paragraph{统计依据。}
 行 $\boldsymbol{\mu}_f, \boldsymbol{\mu}_r$ 是经验蒙特卡洛平均：当 $N_f\to\infty$ 时 $\hat{\boldsymbol{\mu}}_f\to\boldsymbol{\mu}_f^*$，收敛速度 $O_p(1/\sqrt{N_f})$，因此秩一条件是关于\emph{群体级}统计不可区分性的论断（有限样本保证见命题~\ref{prop:confidence}）。
@@ -243,6 +243,8 @@ Algorithm 3: Recommended audit protocol
   3. Report [rho - eps, rho + eps] as a high-probability interval (1 - delta)
   4. Report MIA AUC alongside RII for a two-axis assessment
 \end{verbatim}}
+
+下面的结果关注\emph{通道}——类别输出 $Y$ 的条件发射分布——而非 softmax 向量的逐样本分布；这一区分的范围在注记~\ref{rem:channel} 中讨论。
 
 \begin{theorem}[输出分布不可逆性]
 \label{thm:perfect}
