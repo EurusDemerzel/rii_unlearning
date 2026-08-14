@@ -1,0 +1,469 @@
+% =============================================================================
+% zh_part4.tex — 附录 A/B/C + 参考文献（逐句对照中文版）
+% =============================================================================
+
+\appendix
+
+% =============================================================================
+\section{PSSD：逐样本状态差异扩展}
+\label{app:pssd}
+
+RII 与 MHPR 证明通道的输出级不可区分性，但无法检测异常的\emph{个别}样本（注记~\ref{rem:channel}）。本附录发展 PSSD（逐样本状态差异，Per-Sample State Disparity），一种"先度量后平均"的改进，为每个样本计算差异得分。论文的核心 RII/MHPR 贡献不依赖此扩展。
+
+\subsection{定义}
+
+设 $Q:\mathbb{R}^C\to\{1,\dots,m\}$ 为第~\ref{sec:logit_bridge}~节的 $k$-means 量化器。\textbf{保留参照分布}为
+\begin{equation}
+\pi_r(s) = \frac{1}{N_r}\sum_{x\in D_r}\mathbf{1}\{Q(z(x))=s\}, \qquad \boldsymbol{\pi}_r\in\Delta^{m-1}.
+\end{equation}
+
+\begin{definition}[个体状态差异（ISD）]
+\label{def:isd}
+对状态为 $s(x)=Q(z(x))$ 的 $x$，$\delta(x)\coloneqq 1-\pi_r(s(x))\in[0,1-1/m]$，度量样本的 logit 状态相对保留分布的``令人惊讶''程度。
+\end{definition}
+
+\begin{definition}[聚合 PSSD 指标]
+\label{def:pssd_agg}
+\begin{align}
+\textbf{MPSD:}\quad &\Delta_f \coloneqq \frac{1}{N_f}\sum_{x\in D_f}\delta(x), &
+\textbf{超出量:}\quad &\Psi \coloneqq \Delta_f - \Delta_r,\\
+\textbf{Top-$k$:}\quad &\Delta_{(k)} \coloneqq \frac{1}{k}\sum_{i=1}^k\delta_{[i]},
+\end{align}
+其中 $\delta_{[1]}\ge\cdots$ 为次序统计量。$\Psi$ 量化遗忘样本超出基线水平的\emph{额外}惊讶程度，而 $\Delta_{(k)}$ 刻画最坏情况的个体泄漏。
+\end{definition}
+
+\subsection{理论保证}
+
+\begin{proposition}[PSSD--RII 联系]
+\label{prop:pssd_rii}
+$\Delta_f = 1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$。当 $\|\boldsymbol{\pi}_f\|_2=\|\boldsymbol{\pi}_r\|_2=s$ 时，状态空间 RII 满足 $\rho_{\mathcal{S}}=\frac{s-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{2s}=\frac{1}{2}\bigl(1-\frac{\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{\|\boldsymbol{\pi}_f\|_2^2}\bigr)$。差距 $|\Delta_f-\rho_{\mathcal{S}}|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/m)+O(\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_2^2)$。因此当 $\boldsymbol{\pi}_f\to\boldsymbol{\pi}_r$ 时 $\Delta_f$ 与 $\rho_{\mathcal{S}}$ 渐近等价，且 $\rho_{\mathcal{S}}=0$ 当且仅当 $\Delta_f = 1-\|\boldsymbol{\pi}_r\|_2^2$。
+\end{proposition}
+
+\begin{proof}[证明梗概]
+$\Delta_f=\frac1{N_f}\sum_i(1-\pi_r(s_i))=1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$。差距项通过围绕 $\boldsymbol{\pi}_f=\boldsymbol{\pi}_r$ 展开 $\rho_{\mathcal{S}}$ 并界定 $|\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle-\|\boldsymbol{\pi}_r\|_2^2|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/m)$ 得到。
+\end{proof}
+
+\begin{proposition}[集中界]
+\label{prop:pssd_conc}
+由于 $\delta(x)\in[0,1]$，Hoeffding 给出 $|\hat{\Delta}_f-\Delta_f|\le\sqrt{\log(2/\zeta)/(2N_f)}$ 与 $|\hat{\Psi}-\Psi|\le\sqrt{2\log(4/\zeta)/N_{\min}}$，置信度 $\ge1-\zeta$。与命题~\ref{prop:confidence} 不同，无需次高斯假设。
+\end{proposition}
+
+\begin{proposition}[逐样本 MHPR Jensen 差距]
+\label{prop:ps_mhpr}
+定义逐样本状态残差 $\rho_H(x)\coloneqq\min_{\mathbf{w}}\|\mathbf{e}_{s(x)}-\sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2$ 与 $\bar{\rho}_H\coloneqq\frac1{N_f}\sum_x\rho_H(x)$。则 $\bar{\rho}_H \ge \|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}}$；特别地 $\bar{\rho}_H\ge0$，当且仅当遗忘类是状态齐次时取等。该差距等于遗忘类投影后类内状态方差的平均值。
+\end{proposition}
+
+\begin{proof}[证明梗概]
+对固定子空间 $\mathcal{S}_H$，残差 $\|\mathbf{v}-\mathbf{P}_{\mathcal{S}_H}\mathbf{v}\|_2^2$ 是关于 $\mathbf{v}$ 的凸二次型。Jensen 给出 $\frac1{N_f}\sum_x\rho_H(x)\ge\rho_H(\frac1{N_f}\sum_x\mathbf{e}_{s(x)})=\rho_H(\boldsymbol{\pi}_f)$，且 $\rho_H(\boldsymbol{\pi}_f)=\min_{\mathbf{w}}\|\boldsymbol{\pi}_f-\sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2=\|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}}$。精确差距为 $\frac1{N_f}\sum_x\|(\mathbf{I}-\mathbf{P}_{\mathcal{S}_H})(\mathbf{e}_{s(x)}-\boldsymbol{\pi}_f)\|_2^2\ge0$，仅当遗忘类是状态齐次（所有样本映射到同一状态）时消失。
+\end{proof}
+
+\begin{theorem}[基于 PSSD 的 MIA]
+\label{thm:pssd_mia}
+分类器 $T_\tau(x)=\mathbf{1}\{\delta(x)\ge\tau\}$ 满足：(i) $\Psi>0\Rightarrow\mathrm{AUC}>0.5$；(ii) $\mathrm{AUC}\ge1-\frac12\mathrm{H}^2(P_{\delta|f},P_{\delta|r})$（Hellinger 界）；(iii) $|\widehat{\mathrm{AUC}}-\mathrm{AUC}|\le\sqrt{\log(2/\zeta)/(2(N_f+N_r))}$。
+\end{theorem}
+
+\paragraph{状态轨迹（扩展）。}
+对 $L$ 层模型，每个样本有状态轨迹 $\mathbf{s}(x)=(s_1,\dots,s_L)$；将其建模为一阶马尔可夫链可将 PSSD 扩展到单层 logits 之外，留待未来工作。完整证明见附录~\ref{sec:appendix}。
+
+\subsection{实验结果}
+
+我们在类级遗忘上评估 PSSD，使用 $k$-means 量化（$m{=}20$ 状态，$K{=}3$ 留出）。表~\ref{tab:pssd_results} 报告 5 个梯度上升步后 MPSD $\Delta_f$、超出量 $\Psi$，以及 $\delta$ 基与置信基两种分类器的 MIA AUC。
+
+\begin{table}[t]
+\centering
+\small
+\caption{PSSD 指标对比 MIA（$m{=}20$，$K{=}3$，5 步上升）。}\label{tab:pssd_results}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c c}
+\toprule
+数据集 & $\Delta_f$ & $\Psi$ & MIA($\delta$) & MIA(conf.) \\
+\midrule
+MNIST & 0.997 & 0.066 & \textbf{0.990} & 0.570 \\
+Fashion-MNIST & 0.990 & 0.057 & \textbf{0.943} & 0.701 \\
+CIFAR-10 & 0.978 & 0.001 & 0.511 & 0.807 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+$\delta$ 基 MIA 在 MLP 模型上优于置信基 MIA（表~\ref{tab:pssd_results}），利用 softmax 置信度随机时仍可判别的 logit 几何。对 CIFAR-10（CNN），优势显著收窄：$\mathrm{AUC}(\delta){=}0.511$ 对比 $\mathrm{AUC}(\mathrm{conf.}){=}0.807$，因为 CNN 的 softmax 置信度本身提供强 MIA 信号，而超出差异 $\Psi{=}0.001$ 近零。
+
+\paragraph{对 $m$ 与量化的敏感性。}在 MNIST 上跨 $m{=}20,50,100$，MPSD 稳定（$\Delta_f{=}0.997{\pm}0.002$）且 $\delta$-MIA AUC 保持 $>0.97$，而 $\Psi$ 从 $0.066$ 降到 $0.014$，$\rho_{\mathcal{S}}$ 从 $0.176$ 降到 $0.131$，随码本细化收敛到 $\rho_{\mathrm{sm}}{=}0.109$（定理~\ref{thm:state_bridge}）。我们推荐默认 $m{=}2C{=}20$。
+
+% =============================================================================
+\section{状态空间桥与算子理论推广}
+\label{app:bridge}
+
+\subsection{量化与谱桥}
+
+\begin{lemma}[量化误差]
+\label{lem:quantization}
+对 $N$ 个独立同分布、$\|z\|_2\le R$ 的 logit 向量，带 $m$ 个中心的 $k$-means 给出量化误差 $\mathbb{E}[\|z-\tilde{z}\|_2] \le \tilde{O}(R\sqrt{Cm/N}) + O(R\sqrt{\log(1/\zeta)/N})$，置信度 $\ge1-\zeta$，其中 $\tilde{z}$ 为码本重构。证明见附录~\ref{sec:appendix}。
+\end{lemma}
+
+\begin{theorem}[谱桥：状态 $\leftrightarrow$ softmax]
+\label{thm:state_bridge}
+设 $\mathbf{a}_s = \mathbb{E}[\mathbf{p}(x) \mid Q(z(x))=s]$ 为状态 $s$ 内的平均 softmax，$\mathbf{A} = [\mathbf{a}_1,\dots,\mathbf{a}_m]^\top$ 的奇异值为 $\tau_1 \ge \cdots \ge \tau_m > 0$。设 $\mathbf{B}\in\mathbb{R}^{2\times m}$ 的两行为遗忘/保留的状态条件概率，则 softmax 通道分解为 $\mathbf{M}_{\mathrm{sm}}=\mathbf{B}\mathbf{A}$。假设 softmax 为 $L$-Lipschitz 且量化误差 $\le \delta_q$（引理~\ref{lem:quantization}）。则
+\begin{equation}
+|\rho_{\mathcal{S}} - \rho_{\mathrm{sm}}| \le 2\Bigl(\frac{\tau_1}{\tau_m}-1\Bigr)\rho_{\mathcal{S}} + O\!\Bigl(\Bigl(\frac{\tau_1}{\tau_m}-1\Bigr)^2 + \frac{L\delta_q}{\|\boldsymbol{\mu}_f\|_2}\Bigr).
+\end{equation}
+若码本良态（$\tau_1/\tau_m \le 1+\kappa_0$）且 $\delta_q$ 小，则两个 RII 值等价到常数因子。证明利用分解 $\mathbf{M}_{\mathrm{sm}}=\mathbf{B}\mathbf{A}$ 并通过右逆论证界定奇异值（附录~\ref{sec:appendix}）。
+\end{theorem}
+
+\begin{theorem}[MHPR 对 softmax RII 的偏差]
+\label{thm:softmax_deviation}
+设 $\boldsymbol{\mu}_f^*$ 为遗忘类的总体平均 softmax，$\mathbf{H}^* \in \mathbb{R}^{K\times C}$ 为 $K$ 个留出类总体均值的矩阵，$r=\mathrm{rank}(\mathbf{H}^*)\le K$。假设理想条件 $\boldsymbol{\mu}_f^* \in \mathrm{rowspan}(\mathbf{H}^*)$。设 $\hat{\boldsymbol{\mu}}_f$、$\hat{\mathbf{H}}$ 为来自 $N_f$ 与 $N_{h_1},\dots,N_{h_K}$ 个样本的经验估计，$N_{\min} = \min(N_f,N_{h_1},\dots,N_{h_K})$，$\sigma_{\min}(\mathbf{H}^*)$ 为 $\mathbf{H}^*$ 的最小奇异值。则置信度 $\ge 1-\delta$ 时，
+\begin{equation}
+\rho_H \le O\!\left(\frac{r\,\nu^2 C\,\log((K+1)C/\delta)}{\sigma_{\min}^2(\mathbf{H}^*)\|\boldsymbol{\mu}_f^*\|_2^2\,N_{\min}}\right) + O(N_{\min}^{-3/2}).
+\end{equation}
+因此 $\rho_H = O(1/N_{\min})$，快于标准 RII 界的 $O(1/\sqrt{N})$ 阶。
+\end{theorem}
+
+\subsection{算子理论推广}
+
+离散 $2\times C$ 分析通过 Hilbert--Schmidt 算子理论提升到连续输入/输出空间，为定理~\ref{thm:unified} 提供基础。在温和正则性下，条件密度有典范分解 $f_{Y|X}(y|x)=f_Y(y)+\sum_{k=1}^{\infty}\sigma_k\,\phi_k(y)\,\psi_k(x)$，其中 $\sigma_1\ge\sigma_2\ge\cdots\ge0$，$\{\phi_k\},\{\psi_k\}$ 分别是 $L^2(\mathcal{Y}),L^2(\mathcal{X})$ 按 $P_Y,P_X$ 加权的标准正交基。第一项是边际密度（$\sigma_1=1$——加权基的归一化，区别于离散通道矩阵 $\mathbf{M}$ 的未加权首奇异值，后者不必等于 1）。\textbf{偏离参数} $\eta^2\coloneqq\sum_{k\ge2}\sigma_k^2$ 量化所有秩 $\ge2$ 分量的总能量；在离散 $2\times C$ 情形，$\eta^2=\sigma_2^2$ 且 $\rho=\eta^2/(\sigma_1^2+\eta^2)$，因此 $\rho$ 关于 $\eta^2$ \textbf{单调}，且 $\mathbb{E}_X[\chi^2(P_{Y|X}\|P_Y)]=\eta^2$ 确立 $\eta^2$ 既是谱量又是散度论量。
+
+% =============================================================================
+\section{关键证明与补充结果}
+\label{sec:appendix}
+
+\subsection{定理~\ref{thm:perfect} 的证明（输出分布不可逆性）}
+\label{app:perfect}
+\begin{proof}
+我们证明两个方向。
+
+\noindent\textit{（$\Rightarrow$）}$\rho=0 \Rightarrow \sigma_2=0 \Rightarrow \mathbf{M}$ 秩为 1。由于两行都是和为 1 的概率向量，秩一 $2\times C$ 矩阵的行必成比例：$\boldsymbol{\mu}_f = \lambda \boldsymbol{\mu}_r$ 且 $\lambda>0$。和约束 $\sum_c (\boldsymbol{\mu}_f)_c = \sum_c (\boldsymbol{\mu}_r)_c = 1$ 迫使 $\lambda=1$，故 $\boldsymbol{\mu}_f = \boldsymbol{\mu}_r$。由全概率公式，$(\boldsymbol{\mu}_f)_c = \frac{1}{N_f}\sum_{x\in D_f}p_c(x) = P(Y{=}c\mid X{=}f)$ 且 $(\boldsymbol{\mu}_r)_c = P(Y{=}c\mid X{=}r)$，所以 $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$ 蕴含 $P(Y\mid X=1,\theta') = P(Y\mid X=0,\theta')$，即 $Y\perp X\mid\theta'$ 且 $I(X;Y\mid\theta')=0$。无需指数族或校准假设：$\mathbf{M}$ 的行按构造就是通道的条件输出分布（注记~\ref{rem:channel}）。
+
+\noindent\textit{（$\Leftarrow$）}若 $I(X;Y\mid\theta')=0$，则 $P(Y\mid X{=}f)=P(Y\mid X{=}r)$，即 $\boldsymbol{\mu}_f = \boldsymbol{\mu}_r$，故 $\sigma_2=0$ 且 $\rho=0$。
+\end{proof}
+
+\subsection{命题~\ref{prop:confidence} 的证明（有限样本置信）}
+\label{app:confidence}
+\begin{proof}
+在次高斯假设~\cite{vershynin2018high} 下，每个坐标满足
+\begin{equation}
+\mathbb{P}\bigl(|(\hat{\boldsymbol{\mu}}_f)_c-(\boldsymbol{\mu}_f^*)_c|>t\bigr)\le 2\exp(-N_ft^2/2\nu^2),
+\end{equation}
+对 $C$ 个坐标做 union bound 给出 $\|\hat{\boldsymbol{\mu}}_f-\boldsymbol{\mu}_f^*\|_2\le\nu\sqrt{2C\log(4C/\delta)/N_f}$（置信度 $\ge1-\delta/2$），对 $\hat{\boldsymbol{\mu}}_r$ 同理；因此
+\begin{equation}
+\|\hat{\mathbf{M}}-\mathbf{M}^*\|_F\le2\nu\sqrt{C\log(4C/\delta)/N_{\min}}.
+\end{equation}
+由 Weyl 定理，$\|\hat{\boldsymbol{\sigma}}-\boldsymbol{\sigma}^*\|_2\le\|\hat{\mathbf{M}}-\mathbf{M}^*\|_F$。RII $\rho=f(\sigma_1,\sigma_2)=1-\sigma_1^2/(\sigma_1^2+\sigma_2^2)$ 有 $\|\nabla f\|_2=\frac{2\sigma_1\sigma_2}{(\sigma_1^2+\sigma_2^2)^{3/2}}\le2/\sigma_1$（利用 $\sigma_2\le\sigma_1$），故由中值定理
+\begin{equation}
+|\hat{\rho}-\rho^*|\le\frac{2}{\sigma_1}\|\hat{\boldsymbol{\sigma}}-\boldsymbol{\sigma}^*\|_2\le\frac{4\nu}{\sigma_1}\sqrt{\frac{C\log(4C/\delta)}{N_{\min}}}.
+\end{equation}
+令其 $\le\varepsilon$ 得 $N_{\min}\ge16C\nu^2\log(4C/\delta)/(\sigma_1^2\varepsilon^2)$。
+\end{proof}
+
+\subsection{定理~\ref{thm:mi_bound} 的证明（谱 MI 界）}
+\label{app:mi_bound}
+\begin{proof}
+令 $q=P(X{=}f)$，$\bar{q}=1-q$，$P_Y=q\boldsymbol{\mu}_f+\bar{q}\boldsymbol{\mu}_r$，$\pi_{\min}=\min_y (\boldsymbol{\mu}_r)_y$。以 nat 为单位，$D_{\mathrm{KL}}\le\chi^2$，故 $I(X;Y\mid\theta')\le q\chi^2(\boldsymbol{\mu}_f\|P_Y)+\bar{q}\chi^2(\boldsymbol{\mu}_r\|P_Y)$。由于 $P_Y(y)\ge\bar{q}\pi_{\min}$，
+\begin{equation}
+\chi^2(\boldsymbol{\mu}_f\|P_Y)=\sum_y\frac{\bar{q}^2(\mu_f(y)-\mu_r(y))^2}{P_Y(y)}\le\frac{\bar{q}\,\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2}{\pi_{\min}},
+\end{equation}
+对称地 $\chi^2(\boldsymbol{\mu}_r\|P_Y)\le q\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2/\pi_{\min}$，故 $I\le\frac{2q\bar{q}}{\pi_{\min}}\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2$。在等范数条件 $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$ 下，$\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2=2\sigma_2^2$（定义~\ref{def:M}），故 $I\le\frac{4q\bar{q}\sigma_2^2}{\pi_{\min}}\le\frac{\sigma_2^2}{\pi_{\min}}=\frac{\sigma_1^2}{\pi_{\min}}\frac{\rho}{1-\rho}$（因为 $4q\bar{q}\le1$）。当 $\rho\to0$ 时等范数条件渐近成立，故无该条件时 $I=O(\rho)$。
+\end{proof}
+
+\subsection{定理~\ref{thm:finetune} 的证明（微调泄漏界）}
+\label{app:finetune}
+
+\begin{lemma}[交叉协方差界]
+\label{lem:cross_cov}
+假设对所有 $x$ 有 $\|\mathbf{J}_\theta z_{\theta_0}(x)\|_2 \le J_{\max}$。经过一个 $\lambda$-步后，对训练良好的分类器（$\varepsilon=O(\lambda)$），$\|\boldsymbol{\Sigma}_{fr}\|_F = O(\lambda)$。
+\end{lemma}
+\begin{proof}
+对 $c_f\neq c_r$，$\theta_0$ 处的 logit 梯度内积为 $\langle\nabla_z\ell_f,\nabla_z\ell_r\rangle=\langle\mathbf{p}_f,\mathbf{p}_r\rangle-p_f(c_r)-p_r(c_f)=O(\varepsilon)$（分类器误差）。经过 $\lambda$-步后，$\|\Delta z\|_2\le\lambda L\|\mathbf{g}\|_2+O(\lambda^2)$，且 softmax $1$-Lipschitz 连续性给出 $|\langle\nabla_z\ell'_f,\nabla_z\ell'_r\rangle|\le|\langle\nabla_z\ell_f,\nabla_z\ell_r\rangle|+2\|\Delta z\|_2=O(\varepsilon+\lambda)$。通过链式法则 $\nabla_\theta\ell=\mathbf{J}_\theta z^\top\nabla_z\ell$ 与 $\|\mathbf{J}_\theta z\|_2\le J_{\max}$，参数空间协方差继承该尺度：对训练良好的分类器，$\|\boldsymbol{\Sigma}_{fr}\|_F=O(\varepsilon+\lambda)=O(\lambda)$。
+\end{proof}
+
+\begin{proof}[定理~\ref{thm:finetune} 的证明]
+以 $\mathbf{g}=\nabla_\theta\mathcal{L}(\theta_0,D_f)$ 与 $\theta'=\theta_0+\lambda\mathbf{g}$，一阶 Taylor 展开给出
+\begin{equation}
+\Delta\boldsymbol{\mu}_f=\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_f=\frac{\lambda}{N_f}\sum_{x\in D_f}\mathbf{J}_{\mathrm{softmax}}(f_{\theta_0}(x))\mathbf{J}_\theta f_{\theta_0}(x)\mathbf{g}+O(\lambda^2),
+\end{equation}
+且对保留样本 $\|\Delta\boldsymbol{\mu}_r\|_2\le\lambda L\|\mathbf{g}\|_2$（一致 softmax Jacobian 界）。平方位移满足 $\|\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_r'\|_2^2\le\|\Delta\boldsymbol{\mu}_f\|_2^2+\|\Delta\boldsymbol{\mu}_r\|_2^2+2\|\Delta\boldsymbol{\mu}_f\|_2\|\Delta\boldsymbol{\mu}_r\|_2$（我们省略与 $\boldsymbol{\mu}_f-\boldsymbol{\mu}_r$ 的一阶交叉项：一般情形它至多为 $O(\lambda^2)$ 阶，因此不改变首阶 $O(\lambda^2)$ 界；对类级遗忘，其期望由引理~\ref{lem:cross_cov} 为 $O(\lambda^3)$，故可吸收进余项）。由 $\|\Delta\boldsymbol{\mu}_f\|_2\le\lambda L\|\mathbf{g}\|_2\sqrt{\mathrm{Tr}(\boldsymbol{\Sigma}_f)}$（在小步条件 $\lambda\|\mathbf{g}\|_2=O(1)$ 下；等价地，可将上升方向归一化并把该因子吸收进 $\lambda$），
+\begin{equation}
+\|\hat{\boldsymbol{\mu}}_f'-\hat{\boldsymbol{\mu}}_r'\|_2^2\le\lambda^2L^2\mathrm{Tr}(\boldsymbol{\Sigma}_f)+O(\lambda^3).
+\end{equation}
+利用 $\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2=\sqrt{2}\sigma_2$ 与 $\rho\approx\|\boldsymbol{\mu}_f-\boldsymbol{\mu}_r\|_2^2/(2\sigma_1^2)$（$\rho\ll1$ 时）得 $\rho(\theta')\le\frac{\lambda^2L^2}{2\sigma_1^2}\mathrm{Tr}(\boldsymbol{\Sigma}_f)+O(\lambda^3)$。对类级遗忘，交叉项 $\mathbb{E}[\langle\Delta\boldsymbol{\mu}_f,\Delta\boldsymbol{\mu}_r\rangle]=\lambda^2\mathrm{Tr}(\boldsymbol{\Sigma}_{fr})+O(\lambda^3)$ 由引理~\ref{lem:cross_cov} 为 $O(\lambda^3)$，保持 $O(\lambda^2)$ 阶。
+\end{proof}
+
+\subsection{定理~\ref{thm:unified} 的证明梗概（统一分解）}
+\label{app:unified}
+\begin{proof}
+由链式法则，$I(X;R) \le I(X;Y) + I(X;R\mid Y)$。对覆盖项，Hilbert--Schmidt 分解 $f_{Y|X}(y|x) = f_Y(y) + \sum_{k\ge 2}\sigma_k\phi_k(y)\psi_k(x)$ 给出 $\chi^2(P_{Y|X=x}\|P_Y)=\int\frac{(\sum_{k\ge2}\sigma_k\phi_k(y)\psi_k(x))^2}{f_Y(y)}\,dy=\sum_{k\ge2}\sigma_k^2\psi_k(x)^2$；对 $X$ 取平均并利用 $\mathbb{E}_X[\psi_k(X)^2]=1$ 得 $\mathbb{E}_X[\chi^2(P_{Y|X}\|P_Y)] = \sum_{k\ge 2}\sigma_k^2 = \eta^2$。由于 $D_{\mathrm{KL}} \le \chi^2$，有 $I(X;Y) \le \eta^2$。对直接项，条件于 $Y=y$，$R = \alpha X + \beta y + N$。由引理~\ref{lem:fisher}（Fisher 信息展开），$I(X;R\mid Y) = \frac{\alpha^2}{2\sigma^2}\operatorname{Var}(X) + o(\alpha^2)$。求和即得分解。
+\end{proof}
+
+\begin{proof}[定理~\ref{thm:state_bridge} 的证明]
+由 $\mathbf{M}_{\mathrm{sm}} = \mathbf{B}\mathbf{A}$ 与变分刻画 $\sigma_i(\mathbf{B}\mathbf{A})=\max_{\dim V=i}\min_{v\in V}\|\mathbf{B}\mathbf{A}v\|_2/\|v\|_2$，上界由 $\|\mathbf{A}v\|_2\le\tau_1\|v\|_2$ 得：$\sigma_i(\mathbf{B}\mathbf{A})\le\tau_1\sigma_i(\mathbf{B})$。对下界，右逆 $\mathbf{A}\mathbf{A}^+=\mathbf{I}_m$ 给出 $\mathbf{B}=\mathbf{B}\mathbf{A}\mathbf{A}^+$，故 $\sigma_i(\mathbf{B})\le\|\mathbf{A}^+\|_2\,\sigma_i(\mathbf{B}\mathbf{A})=\tau_m^{-1}\sigma_i(\mathbf{B}\mathbf{A})$，即 $\sigma_i(\mathbf{B}\mathbf{A})\ge\tau_m\sigma_i(\mathbf{B})$。因此 $\frac{\tau_m}{\tau_1}\epsilon \le \tilde{\epsilon} \le \frac{\tau_1}{\tau_m}\epsilon$，其中 $\epsilon=\sigma_2/\sigma_1$，给出 $|\rho_{\mathrm{sm}}-\rho_{\mathcal{S}}| \le 2(\tau_1/\tau_m-1)\rho_{\mathcal{S}} + O((\tau_1/\tau_m-1)^2)$。$L\delta_q/\|\boldsymbol{\mu}_f\|_2$ 项计入 $\mathbf{a}_s$ 的类内方差。
+\end{proof}
+
+\subsection{桥与 $\chi^2$ 控制证明}
+\label{app:bridge_proofs}
+
+\begin{proof}[定理~\ref{thm:state_mhpr} 的证明]
+$\rho_{H,\mathcal{S}} = \min_{\mathbf{w}} \|\boldsymbol{\pi}_f - \sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2 / \|\boldsymbol{\pi}_f\|_2^2 \le \|\boldsymbol{\pi}_f - \bar{\boldsymbol{\pi}}_H\|_2^2 / \|\boldsymbol{\pi}_f\|_2^2$。由于 $1/\bar{\pi}_H(m) \ge 1$，有 $\|\boldsymbol{\pi}_f - \bar{\boldsymbol{\pi}}_H\|_2^2 \le \chi^2(\boldsymbol{\pi}_f\|\bar{\boldsymbol{\pi}}_H)$。结合 $\|\boldsymbol{\pi}_f\|_2^2 \ge \gamma$ 与 $\chi^2 \le \tau^2$，得 $\rho_{H,\mathcal{S}} \le \tau^2/\gamma$。
+\end{proof}
+
+\begin{proof}[定理~\ref{thm:softmax_deviation} 的证明]
+分解 $\|\hat{\boldsymbol{\mu}}_f - \mathbf{P}_{\hat{\mathbf{H}}}\hat{\boldsymbol{\mu}}_f\|_2 \le \|(\mathbf{I} - \mathbf{P}_{\mathbf{H}^*})\hat{\boldsymbol{\mu}}_f\|_2 + \|(\mathbf{P}_{\mathbf{H}^*} - \mathbf{P}_{\hat{\mathbf{H}}})\hat{\boldsymbol{\mu}}_f\|_2$。在 $\boldsymbol{\mu}_f^* \in \mathrm{rowspan}(\mathbf{H}^*)$ 下，第一项化为 $\|\hat{\boldsymbol{\mu}}_f - \boldsymbol{\mu}_f^*\|_2$。对第二项，由子空间摄动理论~\cite{stewart1990matrix}，当 $\|\hat{\mathbf{H}}-\mathbf{H}^*\|_2 \le \sigma_{\min}(\mathbf{H}^*)/2$ 时，$\|\mathbf{P}_{\hat{\mathbf{H}}} - \mathbf{P}_{\mathbf{H}^*}\|_2 \le \frac{2\sqrt{r}}{\sigma_{\min}(\mathbf{H}^*)}\|\hat{\mathbf{H}}-\mathbf{H}^*\|_2$。两个误差项都由 Hoeffding 界为 $2\nu\sqrt{C\log(2(K+1)C/\delta)/N_{\min}}$。代入并应用 delta 方法得 $\rho_H = O(1/N_{\min})$。
+\end{proof}
+
+\subsection{引理~\ref{lem:fisher} 的证明（Fisher 信息展开）}
+\label{app:fisher}
+\begin{proof}
+假设 $f_Z\in C^2$ 且 $f_Z$ 及其导数在无穷远处衰减得足够快以使下列分部积分成立。对二元 $X\in\{0,1\}$（$P(X{=}1)=q$），$f_R(r)=f_Z(r)-q\alpha f_Z'(r)+\frac{q\alpha^2}{2}f_Z''(r)+o(\alpha^2)$。令 $\delta f=f_R-f_Z$。$f_Z+\delta f$ 的熵摄动为
+\begin{equation}
+H(f_Z+\delta f)=H(f_Z)-\int\delta f\,\log f_Z-\frac12\int\frac{(\delta f)^2}{f_Z}+o(\|\delta f\|^2),
+\end{equation}
+其中 $\int\delta f=0$（质量守恒）。$O(\alpha)$ 项消失，因为 $\int f_Z'\log f_Z=[f_Z\log f_Z]-\int f_Z'=0$；分部积分得 $\int f_Z''\log f_Z=-\int(f_Z')^2/f_Z=-J(Z)$。二次项贡献 $-\frac{q^2\alpha^2}{2}J(Z)$。因此
+\begin{equation}
+H(R)-H(Z)=\frac{q(1-q)\alpha^2}{2}J(Z)+o(\alpha^2)=\frac{\alpha^2}{2}\mathrm{Var}(X)J(Z)+o(\alpha^2).
+\end{equation}
+由于 $H(R|X)=H(Z)$，$I(X;R)=H(R)-H(R|X)=\frac{\alpha^2}{2}\mathrm{Var}(X)J(Z)+o(\alpha^2)$；对高斯噪声 $J(N)=1/\sigma^2$。
+\end{proof}
+
+\subsection{MHPR 理论保证}
+\label{app:mhpr}
+
+设 $\boldsymbol{\mu}_f \in \mathbb{R}^C$ 为遗忘类的平均 softmax 向量，$\mathbf{H}_K \in \mathbb{R}^{K\times C}$ 为 $K$ 个留出类均值的矩阵。记 $\mathcal{S}_K = \mathrm{rowspan}(\mathbf{H}_K)$，$\mathbf{P}_{\mathcal{S}_K}$ 为正交投影。
+
+\begin{proposition}[随 $K$ 的单调改进]
+\label{prop:mhpr_monotone}
+对 $K_1 \le K_2$，$\rho_H(K_2) \le \rho_H(K_1)$。
+\end{proposition}
+\begin{proof}
+由于 $\mathcal{S}_{K_1} \subseteq \mathcal{S}_{K_2}$，正交投影满足 $\mathbf{P}_{\mathcal{S}_{K_2}} = \mathbf{P}_{\mathcal{S}_{K_1}} + \mathbf{P}_{\mathcal{S}_{K_2} \cap \mathcal{S}_{K_1}^\perp}$。勾股定理给出 $\|\boldsymbol{\mu}_f - \mathbf{P}_{\mathcal{S}_{K_2}}\boldsymbol{\mu}_f\|_2^2 = \|\boldsymbol{\mu}_f - \mathbf{P}_{\mathcal{S}_{K_1}}\boldsymbol{\mu}_f\|_2^2 - \|\mathbf{P}_{\mathcal{S}_{K_2} \cap \mathcal{S}_{K_1}^\perp}\boldsymbol{\mu}_f\|_2^2 \le \|\boldsymbol{\mu}_f - \mathbf{P}_{\mathcal{S}_{K_1}}\boldsymbol{\mu}_f\|_2^2$。
+\end{proof}
+
+\begin{proposition}[偏差--方差分解]
+\label{prop:mhpr_bias}
+在 $\mathcal{H}_0$（$\boldsymbol{\mu}_f^* \in \mathcal{S}_K^*$）下，$\mathbb{E}[\rho_{\mathrm{est}}] = O(C/N_{\min})$。
+\end{proposition}
+\begin{proof}
+在 $\mathcal{H}_0$（$\boldsymbol{\mu}_f^*=\mathbf{P}_{\mathcal{S}_K^*}\boldsymbol{\mu}_f^*$）下，分子展开为 $\|(\mathbf{I}-\mathbf{P}_{\mathcal{S}_K^*})\boldsymbol{\delta}_f-\Delta_H\boldsymbol{\mu}_f^*-\Delta_H\boldsymbol{\delta}_f\|_2^2$，其中 $\boldsymbol{\delta}_f=\hat{\boldsymbol{\mu}}_f-\boldsymbol{\mu}_f^*$，$\Delta_H=\mathbf{P}_{\mathcal{S}_K}-\mathbf{P}_{\mathcal{S}_K^*}$。标准界通过次高斯集中与子空间摄动~\cite{stewart1990matrix} 给出 $\|\boldsymbol{\delta}_f\|_2=O_p(\sqrt{C/N_f})$ 与 $\|\Delta_H\|_2=O_p(\sqrt{CK/N_{\min}})$；分母以 $O_p(1/\sqrt{N_f})$ 收敛。二阶 Taylor 展开 $\rho_{\mathrm{est}}\approx\rho_H^*+\nabla\rho_H^*\,(\hat{\mathbf{z}}-\mathbf{z}^*)+\frac12(\hat{\mathbf{z}}-\mathbf{z}^*)^\top\nabla^2\rho_H^*\,(\hat{\mathbf{z}}-\mathbf{z}^*)$ 的线性项均值为零（估计量一阶无偏）；二次项为 $O(\|\hat{\mathbf{z}}-\mathbf{z}^*\|_2^2)=O_p(CK/N_{\min})$。因此 delta 方法给出 $\mathbb{E}[\rho_{\mathrm{est}}]=O(CK/N_{\min})$，当 $K=O(1)$ 时为 $O(C/N_{\min})$。
+\end{proof}
+
+\begin{proposition}[有限样本界]
+\label{prop:mhpr_confidence}
+对方差代理 $\nu^2$ 的次高斯 softmax 向量且 $\sigma_{\min}(\mathbf{H}^*)>0$，
+\begin{equation}
+|\hat{\rho}_H - \rho_H^*| \le \frac{4\nu}{\|\boldsymbol{\mu}_f^*\|_2}\left(2+\frac{\sqrt{K}\,\|\boldsymbol{\mu}_f^*\|_2}{\sigma_{\min}(\mathbf{H}^*)}\right)\sqrt{\frac{C(K+1)\log(2(K+1)C/\delta)}{N_{\min}}}
+\end{equation}
+置信度 $\ge 1-\delta$。
+\end{proposition}
+\begin{proof}
+令 $\hat{\mathbf{z}}=(\hat{\boldsymbol{\mu}}_f,\hat{\boldsymbol{\mu}}_{h_1},\dots,\hat{\boldsymbol{\mu}}_{h_K})$。对遗忘方向，$\|\nabla_{\boldsymbol{\mu}_f}\phi\|_2\le4/\|\boldsymbol{\mu}_f\|_2$（由 $\nabla\phi=2(\mathbf{I}-\mathbf{P}_{\mathcal{S}_K})\boldsymbol{\mu}_f/\|\boldsymbol{\mu}_f\|_2^2-2\phi\boldsymbol{\mu}_f/\|\boldsymbol{\mu}_f\|_2^2$）；对每个留出方向，Davis--Kahan~\cite{stewart1990matrix} 给出 $\|\nabla_{\boldsymbol{\mu}_{h_k}}\phi\|_2\le2/\sigma_{\min}(\mathbf{H}^*)$。当 $\|\hat{\boldsymbol{\mu}}_f\|_2\ge\|\boldsymbol{\mu}_f^*\|_2/2$（大 $N_f$）时，组合 Lipschitz 常数为 $L=\frac{4}{\|\boldsymbol{\mu}_f^*\|_2}(2+\frac{\sqrt{K}\|\boldsymbol{\mu}_f^*\|_2}{\sigma_{\min}(\mathbf{H}^*)})$。对 $(K+1)C$ 个分量做 union bound 的 Hoeffding 给出 $\|\hat{\mathbf{z}}-\mathbf{z}^*\|_\infty\le2\nu\sqrt{\log(2(K+1)C/\delta)/N_{\min}}$（高概率），故 $|\hat{\rho}_H-\rho_H^*|\le L\sqrt{(K+1)C}\|\hat{\mathbf{z}}-\mathbf{z}^*\|_\infty$。
+\end{proof}
+
+\subsection{状态空间 MHPR 界验证}
+\label{app:chi2}
+
+我们在 MNIST 类-5 设定（$m=20$ 状态，$K=3$ 留出）上验证定理~\ref{thm:state_mhpr}。界 $\rho_{H,\mathcal{S}} \le \chi^2/\|\boldsymbol{\pi}_f\|_2^2$ 对\emph{每一个}梯度步都成立（表~\ref{tab:chi2}）；$\rho_{H,\mathcal{S}}$ 与 $\chi^2$ 都随遗忘强度单调增长，且该界保守（比值 $\sim5\times10^2$--$2\times10^3$），符合最坏情况不等式的预期。
+
+\begin{table}[t]
+\centering
+\small
+\caption{状态空间 MHPR 界验证（MNIST，$m{=}20$，$K{=}3$）。}\label{tab:chi2}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{l c c c}
+\toprule
+步数 & $\rho_{H,\mathcal{S}}$ & $\chi^2$ & $\chi^2/\|\boldsymbol{\pi}_f\|_2^2$ \\
+\midrule
+0     & 0.999758 & 272.7 & $5.20\times 10^2$ \\
+1     & 0.999758 & 273.0 & $5.20\times 10^2$ \\
+3     & 0.999758 & 279.0 & $5.30\times 10^2$ \\
+5     & 0.999753 & 279.1 & $5.30\times 10^2$ \\
+10    & 0.999752 & 302.3 & $5.75\times 10^2$ \\
+20    & 0.999746 & 346.2 & $6.50\times 10^2$ \\
+50    & 0.999613 & 558.4 & $1.04\times 10^3$ \\
+100   & 0.998588 & 1095.8 & $2.04\times 10^3$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{PSSD 证明}
+
+\begin{proof}[命题~\ref{prop:pssd_rii} 的证明]
+$\Delta_f = \frac1{N_f}\sum_{x\in D_f}(1-\pi_r(s(x))) = 1-\sum_s\pi_f(s)\pi_r(s)=1-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle$。对差距项，当 $\|\boldsymbol{\pi}_f\|_2=\|\boldsymbol{\pi}_r\|_2=s$ 时，状态空间 RII 为 $\rho_{\mathcal{S}}=\frac{s-\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle}{2s}$。围绕 $\boldsymbol{\pi}_f=\boldsymbol{\pi}_r$ 展开得 $|\Delta_f-\rho_{\mathcal{S}}|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/m)+O(\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_2^2)$，其中 $\ell_1$ 项通过 $|\langle\boldsymbol{\pi}_f,\boldsymbol{\pi}_r\rangle-\|\boldsymbol{\pi}_r\|_2^2|\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1\|\boldsymbol{\pi}_r\|_\infty\le\|\boldsymbol{\pi}_f-\boldsymbol{\pi}_r\|_1(1-1/m)$ 占主导。
+\end{proof}
+
+\begin{proof}[命题~\ref{prop:pssd_conc} 的证明]
+每个 $\delta(x_i)\in[0,1]$ 是有界随机变量。Hoeffding 给出 $\mathbb{P}(|\hat{\Delta}_f-\Delta_f|\ge\varepsilon) \le 2\exp(-2N_f\varepsilon^2)$。对 $\hat{\Psi}=\hat{\Delta}_f-\hat{\Delta}_r$，两样本 Hoeffding 界给出 $\mathbb{P}(|\hat{\Psi}-\Psi|\ge\varepsilon) \le 4\exp(-N_{\min}\varepsilon^2/2)$。对 top-$k$，Bonferroni 给出 $\mathbb{P}(|\hat{\Delta}_{(k)}-\Delta_{(k)}|\ge\varepsilon) \le 2k\exp(-2N_f\varepsilon^2/k^2)$。在置信度 $1-\delta$ 下解出 $\varepsilon$ 即得所述速率。与命题~\ref{prop:confidence} 不同，无需次高斯假设。
+\end{proof}
+
+\begin{proof}[命题~\ref{prop:ps_mhpr} 的证明]
+对固定子空间 $\mathcal{S}_H$，残差 $\|\mathbf{v}-\mathbf{P}_{\mathcal{S}_H}\mathbf{v}\|_2^2$ 是关于 $\mathbf{v}$ 的凸二次型。Jensen 给出
+\[
+\frac1{N_f}\sum_{x\in D_f}\rho_H(x) \ge \rho_H\!\left(\frac1{N_f}\sum_{x\in D_f}\mathbf{e}_{s(x)}\right) = \rho_H(\boldsymbol{\pi}_f) = \|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}},
+\]
+因为 $\rho_H(\boldsymbol{\pi}_f)=\min_{\mathbf{w}}\|\boldsymbol{\pi}_f-\sum_k w_k\boldsymbol{\pi}_{h_k}\|_2^2=\|\boldsymbol{\pi}_f\|_2^2\rho_{H,\mathcal{S}}$。精确差距为 $\frac1{N_f}\sum_x\|(\mathbf{I}-\mathbf{P}_{\mathcal{S}_H})(\mathbf{e}_{s(x)}-\boldsymbol{\pi}_f)\|_2^2\ge0$，仅当遗忘类是状态齐次（$\boldsymbol{\pi}_f$ 为 Kronecker delta）时消失。
+\end{proof}
+
+\begin{proof}[定理~\ref{thm:pssd_mia} 的证明]
+(i) 若 $\Psi>0$，$\delta$ 的遗忘侧均值超过保留侧均值；Bayes 最优检验是似然比检验，故存在阈值使 $\mathrm{TPR}>\mathrm{FPR}$，即 $\mathrm{AUC}>0.5$。
+
+(ii) 由 $\mathrm{H}^2(P,Q)=1-\sum_i\sqrt{p_iq_i}$，总变分距离满足 $\mathrm{TV}(P_{\delta|f},P_{\delta|r})\le\mathrm{H}(P_{\delta|f},P_{\delta|r})$（Le Cam）。对阈值分类器，$\mathrm{AUC}=\frac12(1+\mathrm{TPR}-\mathrm{FPR})\ge\frac12(1-\mathrm{TV})$，因为在最优阈值处 $\mathrm{TPR}-\mathrm{FPR}\ge1-\mathrm{TV}$。综合即得 Hellinger 界 $\mathrm{AUC}\ge1-\frac12\mathrm{H}^2$。
+
+(iii) AUC 是核有界的 $U$-统计量，故 Hoeffding 给出 $|\widehat{\mathrm{AUC}}-\mathrm{AUC}|\le\sqrt{\log(2/\zeta)/(2(N_f+N_r))}$。
+
+对基于 softmax 的 MIA（表~\ref{tab:pssd_results}）的经验优势源于 $\delta(x)$ 通过 $\pi_r(Q(z(x)))$ 依赖 logit 几何，而后者在 softmax 概率弥散时仍可判别。
+\end{proof}
+
+\subsection{引理~\ref{lem:quantization} 的证明（量化误差界）}
+\begin{proof}
+对独立同分布、$\|z\|_2\le R$ 且最优 $m$ 中心失真 $D^*=\mathbb{E}[\min_{c\in\mathcal{C}^*}\|z-c\|_2^2]$ 的向量，Kumar--Kannan~\cite{kumar2010clustering} 的过量失真界 $D(\hat{\mathcal{C}})-D^*=O(R^2\sqrt{Cm/N})$ 高概率成立。由于 $\mathbb{E}[\|z-\tilde{z}\|_2]\le\sqrt{D(\hat{\mathcal{C}})}$ 且 $D^*\le R^2$，开方得 $\tilde{O}(R\sqrt{Cm/N})$；$O(R\sqrt{\log(1/\zeta)/N})$ 尾界来自对经验失真估计的 union bound。
+\end{proof}
+
+\subsection{温度缩放信息保持}
+\label{app:temp}
+\begin{proposition}[保序]
+\label{prop:rank_preserve}
+设 $\theta_1',\theta_2'$ 为参数状态，$\rho_T(\theta')$ 为 $\mathbf{p}_T(x)=\mathrm{Softmax}(f(x)/T)$ 在温度 $T$ 下的 RII。若 $\rho_1(\theta_1') \le \rho_1(\theta_2')$，则存在 $T_0\ge1$ 使对所有 $T\ge T_0$ 有 $\rho_T(\theta_1') \le \rho_T(\theta_2')$，前提是保留类均值保持良态。
+\end{proposition}
+\begin{proof}
+当 $T\to\infty$ 时，$\mathbf{p}_T\to\mathbf{1}/C$ 且 $\rho_T\to0$；收敛速率由 $\|\boldsymbol{\mu}_f^{(T)}-\boldsymbol{\mu}_r^{(T)}\|_2\propto T^{-1}\|\boldsymbol{\mu}_f^{(1)}-\boldsymbol{\mu}_r^{(1)}\|_2$ 控制。由于 $T=1$ 的排序是严格的，乘法缩放对一切充分大的 $T$ 保持该排序。
+\end{proof}
+
+% =============================================================================
+% 附录 D 实验细节与 MIA 协议
+% =============================================================================
+\section{实验细节与 MIA 协议}
+\label{app:details}
+
+\subsection{视觉基准}
+
+表~\ref{tab:exp_vision} 汇总视觉基准配置；类级基准基于三个种子（0、1、2）运行并以均值 $\pm$ 标准差报告，无数据增强、逐通道归一化（CIFAR-10：均值 $(0.4914,0.4822,0.4465)$，标准差 $(0.2023,0.1994,0.2010)$；Fashion-MNIST/MNIST：均值 $0.2860$，标准差 $0.3530$）。
+
+\begin{table}[t]
+\centering
+\small
+\caption{视觉基准配置。``类级''指第~\ref{sec:benchmark}~节的协议。}\label{tab:exp_vision}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l l c c c c}
+\toprule
+数据集 & 架构 & 优化器 & lr & batch & epoch \\
+\midrule
+MNIST & SimpleMLP（784$\to$128$\to$10） & Adam & $10^{-3}$ & 64 & 10 \\
+Fashion-MNIST & MLP & Adam & $10^{-3}$ & 64 & 10 \\
+CIFAR-10 & SmallCNN（3 卷积 + 2 全连接） & Adam & $10^{-3}$ & 64 & 10 \\
+CIFAR-100 & SmallCNN / ResNet-18 & Adam & $10^{-3}$ & 64 & 10 \\
+MNIST（过拟合） & DeepMLP & Adam & $10^{-3}$ & 64 & 50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+随机遗忘基线（表~\ref{tab:main}）丢弃随机 5\% 子集；类级协议在 $\{0,\dots,6\}$ 上训练，遗忘类~3、留出类 $\{7,8,9\}$（CIFAR-10 与 Fashion-MNIST），并在 20 类 CIFAR-100 子集上训练，遗忘类~3、留出 $\{20,21,22\}$。所有实验在 Apple Silicon（M5 Pro，24~GB 统一内存）上以 MPS 加速运行；最大的视觉模型（CIFAR-100 上的 ResNet-18）几分钟内即可训练完成，无需 GPU 集群。
+
+\subsection{语言模型实验}
+
+表~\ref{tab:exp_llm} 汇总 LLM 配置。TOFU~\cite{maini2024tofu} 作者级协议使用一个遗忘作者（40 个 QA 对）与 90 作者保留切分；评估使用 20 个遗忘与 40 个保留 QA 对，最大序列长度 384，并在三个随机评估子采样上重复。LoRA（rank 8，scale 20，dropout 0）应用于 32 层中的 8 层。
+
+\begin{table}[t]
+\centering
+\small
+\caption{语言模型配置。}\label{tab:exp_llm}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l l l l}
+\toprule
+实验 & 模型 & PEFT & 遗忘配方 \\
+\midrule
+TOFU 7B & LLaMA-2-7B（TOFU 检查点） & LoRA $r{=}8$，scale 20，8/32 层 & NoUnlearn：原检查点；FineTune：AdamW $10^{-5}$，60 步，batch 1；NegGrad：SGD $2{\times}10^{-5}$，10 步；Retrain：基座 + LoRA on retain，60 步 \\
+MUSE 7B & LLaMA-2-7B（基座） & LoRA $r{=}8$，scale 20，8/32 层 & Teacher：遗忘书籍上 200 步 LoRA；NoUnlearn：teacher 原样；FineTune：AdamW $10^{-5}$，60 步；NegGrad：SGD $2{\times}10^{-5}$，15 步；Retrain：基座 + LoRA on retain，60 步 \\
+TOFU 0.5B & Qwen2.5-0.5B & 全量微调 & AdamW $5{\times}10^{-5}$；FineTune 40 步，NegGrad 8 步，batch 4 \\
+AG News & DistilBERT & 全量微调 & Adam $2{\times}10^{-5}$，2 epoch，batch 32；每类 4000 训练 / 1500 评估；遗忘类 = World 新闻 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+NegGrad 强度扫描（第~\ref{sec:llm}~节）将步数 $\times$ 学习率从基线 $(10, 2{\times}10^{-5})$ 变化到 $(30, 10^{-4})$（$3\times$ 步数，$5\times$ lr）与 $(60, 2{\times}10^{-4})$（$6\times$ 步数，$10\times$ lr），始终从全新的零 LoRA 出发。
+
+\subsection{成员推理攻击细节}
+\label{app:mia}
+
+本文出现两种不同的 MIA 协议，如各表标题与第~\ref{sec:experiments}~节设置中的``关于 MIA 的记号''段落所述。
+
+\textbf{损失阈值 AUC（类级基准，表~\ref{tab:benchmark}）。}对每个遗忘与保留样本计算模型交叉熵损失；每个样本的得分为其损失，报告的 MIA-loss 是对这些得分取阈值得到的 AUC（遗忘样本为正类）。不涉及影子模型或重训练：直接评估目标模型。由于遗忘类在训练协议中是未见类，其损失超过保留样本，产生第~\ref{sec:benchmark}~节讨论的``反向''排序（oracle 达到 AUC${\to}0$，这本身就是成功擦除的证据）。
+
+\textbf{训练/测试成员准确率（随机基线，表~\ref{tab:main}）。}我们按 softmax 置信度（或等价地，负损失）给每个样本打分，并通过阈值分类训练/测试成员性；报告值为两类的平均成员准确率。这度量一般记忆（训练/测试置信度差距），与遗忘/保留不可区分性正交（第~\ref{sec:mia}~节）。
+
+\textbf{为何简单攻击足够。}本文目标是排序遗忘方法而非最大化攻击成功率，且证书 RII 是分布量而非对抗界。更强攻击（如 LiRA 或 Carlini 等人的一阶原理分析~\cite{carlini2022membership}）需要影子模型或重复训练；在统一单模型协议下，额外威力不会改变方法的相对排序，因为任何黑盒攻击者可用的输出级信号就是简单阈值攻击所用的逐样本损失或置信度。因此我们报告简单攻击，并把更强攻击的比较留待未来工作。
+
+% =============================================================================
+% 参考文献（保留英文原文）
+% =============================================================================
+\begin{thebibliography}{99}
+\bibitem{bourtoule2021machine}
+Bourtoule L, Chandrasekaran V, Choquette-Choo C A, et al (2021) Machine unlearning. In: 2021 IEEE Symposium on Security and Privacy (SP), IEEE
+
+\bibitem{nguyen2025survey}
+Nguyen T T, Huynh T T, Ren Z, et al (2025) A survey of machine unlearning. ACM Transactions on Intelligent Systems and Technology 16(5):1-46
+
+\bibitem{cosma2026ruler}
+Cosma G, Finke A (2026) RULER: representation-level verification of machine unlearning. arXiv:2605.27569
+
+\bibitem{yong2026erased}
+Yong T P Y, Ong W K, Chan C S (2026) Erased, but not gone: output forgetting is not true forgetting. arXiv:2606.25001
+
+\bibitem{sanh2020distilbert}
+Sanh V, Debut L, Chaumond J, Wolf T (2019) DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter. arXiv:1910.01108
+
+\bibitem{qwen2024qwen2}
+Qwen Team (2024) Qwen2.5 technical report. arXiv:2412.15115
+
+\bibitem{maini2024tofu}
+Maini P, Feng Z, Schwarzschild A, Lipton Z C, Kolter J Z (2024) TOFU: a task of fictitious unlearning for LLMs. In: Proceedings of the First Conference on Language Modeling (COLM)
+
+\bibitem{shokri2017membership}
+Shokri R, Stronati M, Song C, Shmatikov V (2017) Membership inference attacks against machine learning models. In: 2017 IEEE Symposium on Security and Privacy (SP), IEEE
+
+\bibitem{guo2020certified}
+Guo C, Goldstein T, Hannun A, van der Maaten L (2020) Certified data removal from machine learning models. In: Proceedings of the 37th International Conference on Machine Learning (ICML), PMLR
+
+\bibitem{sommer2022towards}
+Sommer D M, Song L, Wagh S, Mittal P (2022) Athena: probabilistic verification of machine unlearning. Proceedings on Privacy Enhancing Technologies 2022(3):268-290
+
+\bibitem{ye2026auditing}
+Ye D, Zhu T, Huang R, et al (2026) Auditing machine unlearning: a systematic research on whether models truly forget. arXiv:2606.16110
+
+\bibitem{cao2015towards}
+Cao Y, Yang J (2015) Towards making systems forget with machine unlearning. In: 2015 IEEE Symposium on Security and Privacy (SP), IEEE
+
+\bibitem{golatkar2020eternal}
+Golatkar A, Achille A, Soatto S (2020) Eternal sunshine of the spotless net: selective forgetting in deep networks. In: 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), IEEE
+
+\bibitem{ginart2019making}
+Ginart A, Guan M Y, Valiant G, Zou J (2019) Making AI forget you: data deletion in machine learning. In: Advances in Neural Information Processing Systems 32 (NeurIPS)
+
+\bibitem{sekhari2021remember}
+Sekhari A, Acharya J, Kamath G, Suresh A T (2021) Remember what you want to forget: algorithms for machine unlearning. In: Advances in Neural Information Processing Systems 34 (NeurIPS)
+
+\bibitem{carlini2022membership}
+Carlini N, Chien S, Nasr M, et al (2022) Membership inference attacks from first principles. In: 2022 IEEE Symposium on Security and Privacy (SP), IEEE
+
+\bibitem{zhang2024fragile}
+Zhang B, Chen Z, Shen C, Li J (2024) Verification of machine unlearning is fragile. In: Proceedings of the 41st International Conference on Machine Learning (ICML), PMLR
+
+\bibitem{zheng2026bias}
+Zheng W, Chen K, Guo Y, Xiao Y (2026) Classification-head bias in class-level machine unlearning: diagnosis, mitigation, and evaluation. arXiv:2605.08730
+
+\bibitem{xue2026verification}
+Xue L, Hu S, Lu W, et al (2026) Towards reliable forgetting: a survey on machine unlearning verification. ACM Computing Surveys 58(12), Article 314. doi:10.1145/3807451
+
+\bibitem{shannon1949communication}
+Shannon C E (1949) Communication theory of secrecy systems. Bell System Technical Journal 28(4):656-715
+
+\bibitem{bloch2021overview}
+Bloch M, G\"unl\"u O, Yener A, et al (2021) An overview of information-theoretic security and privacy: metrics, limits and applications. IEEE Journal on Selected Areas in Information Theory 2(1)
+
+\bibitem{shi2024muse}
+Shi W, Lee J, Huang Y, et al (2024) MUSE: machine unlearning six-way evaluation for language models. arXiv:2407.06460
+
+\bibitem{vershynin2018high}
+Vershynin R (2018) High-Dimensional Probability: An Introduction with Applications in Data Science. Cambridge University Press, Cambridge
+
+\bibitem{stewart1990matrix}
+Stewart G W, Sun J (1990) Matrix Perturbation Theory. Academic Press, Boston
+
+\bibitem{kumar2010clustering}
+Kumar A, Kannan R (2010) Clustering with spectral norm and the k-means algorithm. In: 2010 IEEE 51st Annual Symposium on Foundations of Computer Science (FOCS), IEEE
+\end{thebibliography}

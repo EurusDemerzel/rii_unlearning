@@ -1,0 +1,344 @@
+% =============================================================================
+% manuscript_zh.tex — 论文中文逐句对照版（人工审稿用）
+% 对应: ai_submission/manuscript.tex (commit 060e2cf)
+% 编译: xelatex manuscript_zh.tex （xelatex 两遍）
+% 说明: 正文叙述逐句译为中文，数学公式/符号/表格数据/参考文献原文保留，
+%       定理、定义、命题、引理、注记、证明环境改为中文标题，标签与原文一致，
+%       便于与英文版逐句对照。
+% =============================================================================
+% 注意: 本机 TeX Live 2026basic 未安装 ctex/xeCJK，故用纯 fontspec + XeTeX
+%       内置中文断行（\XeTeXlinebreaklocale）实现，主字体用 macOS 系统字体。
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{geometry}
+\geometry{margin=2.4cm}
+\usepackage{amsthm}
+\usepackage{fontspec}
+\setmainfont{Songti SC}
+\XeTeXlinebreaklocale "zh"
+\XeTeXlinebreakskip = 0pt plus 1pt
+
+\newtheorem{theorem}{定理}[section]
+\newtheorem{lemma}[theorem]{引理}
+\newtheorem{proposition}[theorem]{命题}
+\newtheorem{corollary}[theorem]{推论}
+\newtheorem{definition}[theorem]{定义}
+\newtheorem{remark}[theorem]{注记}
+\renewcommand{\proofname}{证明}
+
+\newcommand{\coloneqq}{\triangleq}
+
+\title{类级机器学习遗忘的谱认证（逐句对照中文版）}
+\author{Yan Zhang \and Chenggang Lu\\[4pt] {\small 张炎、卢成刚（浙江工业大学理学院）}}
+\date{2026-08-13\quad 对照版本（commit 060e2cf）}
+
+\begin{document}
+
+\maketitle
+
+% =============================================================================
+% 摘要
+% =============================================================================
+\begin{abstract}
+\noindent
+\textbf{摘要（逐句对照）：}
+机器学习遗忘旨在无需完全重训练的情况下，从已训练模型中移除特定训练数据的影响；验证这种移除是否成功是一个核心开放问题。成员推理攻击（MIA）将训练/测试分布位移与遗忘集泄漏混为一谈，而差分隐私界要求侵入式训练，因此二者都无法证明输出级不可区分性。我们引入一个基于 $2\times C$ \emph{经验输出通道矩阵}的谱证书，该矩阵的两行分别是遗忘集与保留集上的平均 softmax 预测，并定义 \textbf{残差不可逆指数（Residual Irreversibility Index, RII）} $\rho=1-\sigma_1^2/(\sigma_1^2+\sigma_2^2)$，当两个通道输出分布不可区分时它精确地消失。对于类级遗忘（标准 RII 在此遭受已知/未知类不对称），我们引入 \textbf{多留出投影残差（Multi-Held-Out Projection Residual, MHPR）} $\rho_H$，将遗忘类均值投影到多个留出未见类的子空间上，并给出有限样本保证与面向低精度情形的温度缩放。我们证明 $\rho=0$ 等价于输出通道独立，并导出微调泄漏界、互信息界，以及输出泄漏的统一两轴分解。在跨 CIFAR-10、Fashion-MNIST 与 CIFAR-100（20 类）的统一基准上，以及在标准 TOFU 基准~\cite{maini2024tofu} 与 MUSE 风格长文本书籍遗忘协议上的 70 亿参数语言模型（LLaMA-2-7B，基于 LoRA 的 PEFT）上，RII 在大多数设置中对遗忘方法的排序与已知遗忘强度一致，并在准确率与 MIA 饱和处仍具信息量。当已遗忘检查点将遗忘集生成准确率饱和在 100\% 时，准确率本身无法对它们排序，而 RII 仍将微调排序在未遗忘之下。RII 还揭示出梯度上升的一个隐藏失败：其输出签名在准确率与 MIA 都报告改善的同时反而增强，并伴随一个基于准确率的指标无法发现的微调反弹。在长文本书籍遗忘（MUSE 风格）中，梯度上升使遗忘输出分布保持不变，遗忘困惑度将重训练排序为最强擦除，而原始词表通道携带的是两本书的固有差异而非遗忘状态——这是证书的一个清晰边界，印证通道语义决定其判别力。表示级探针证实输出级擦除可以与特征级签名共存，这促使采用两层审计。
+
+\medskip
+\noindent\textbf{关键词：}秩一通道、机器学习遗忘、奇异值分解、残差不可逆指数、多留出投影、输出空间不可逆性
+\end{abstract}
+
+% =============================================================================
+% §1 引言
+% =============================================================================
+\section{引言}
+\label{sec:intro}
+
+被遗忘权（GDPR 第 17 条）要求机器学习模型应请求消除特定训练数据的影响~\cite{bourtoule2021machine,nguyen2025survey}。一个核心挑战是\emph{如何验证遗忘已经成功}。现有方法要么依赖将训练/测试分布位移与遗忘/保留泄漏混为一谈的成员推理攻击（MIA），要么依赖要求侵入式训练的差分隐私界。
+
+具体而言，我们研究的问题是：\emph{能否用一个轻量、黑盒的证书，在类级情形下（即现有指标最不可靠的情形）验证遗忘集与保留集之间的输出级不可区分性？}我们的答案是模型输出通道上的一个谱条件。
+
+我们提出一个基于\textbf{谱条件}的轻量黑盒证书：输出空间不可逆性归结为 $2\times C$ 输出通道矩阵的秩。所谓\textbf{输出分布不可逆性}，我们指遗忘集成员指示变量 $X$ 与模型在参数 $\theta'$ 下的类别输出 $Y$ 条件独立，即 $I(X;Y\mid\theta')=0$。当此成立时，模型在 $D_f$ 与 $D_r$ 上的输出分布在统计上不可区分，产生一个秩一输出通道矩阵且 $\rho=0$。
+
+\textbf{范围。}我们的框架严格在\emph{输出空间}（可观测的预测）内度量不可逆性，这与黑盒 GDPR 合规审计相符。我们不声称参数级白盒安全。我们聚焦于\textbf{类级遗忘}——最严格且最具实践相关性的情形，其中 $D_f$ 由整个语义类的全部样本组成；MHPR（见第~\ref{sec:mhpr}~节）专门处理此处出现的已知/未知类不对称。
+
+框架建立在一个简单观察之上。$2\times C$ \textbf{经验输出通道矩阵} $\mathbf{M}(\theta')$ 的行是 $\boldsymbol{\mu}_f$ 与 $\boldsymbol{\mu}_r$（$D_f$ 与 $D_r$ 上的平均 softmax 向量）。其奇异值 $\sigma_1 \ge \sigma_2$ 编码残差依赖：$\sigma_2 = 0 \iff \mathrm{rank}(\mathbf{M}) = 1 \iff$ 完美移除。
+
+\textbf{贡献：}
+\begin{enumerate}
+\item 一个输出谱框架（第~\ref{sec:channel}~节）：一个 $2\times C$ 通道矩阵，其秩一条件给出无需调参的残差不可逆指数（RII）。
+\item 一个证明（定理~\ref{thm:perfect}）：$\rho=0$ 当且仅当 $I(X;Y\mid\theta')=0$，论证是通道级的，无需指数族或校准假设。
+\item 面向类级遗忘的 MHPR（第~\ref{sec:mhpr}~节）：一种多留出投影，在很大程度上解决已知/未知类不对称（将 oracle 的残差降到远低于其标准 RII 水平），并附带温度缩放与有限样本保证。
+\item 理论保证（第~\ref{sec:theory}~节）：置信界、$O(\lambda^2)$ 微调泄漏界、谱互信息界，以及将输出泄漏分解为两个正交轴的统一分解。
+\item 对 RII 与 MHPR 在统一七方法基准以及 TOFU 与 MUSE 风格书籍遗忘基准的 70 亿参数语言模型上的评估（第~\ref{sec:experiments}~节），揭示准确率与 MIA 都会错过的隐藏失败（梯度上升签名增强与微调反弹）；在 TOFU 上，RII 对生成准确率饱和于 100\% 的已遗忘检查点进行排序，而准确率本身不提供任何排序，且在长文本书籍遗忘中梯度上升同样使遗忘输出分布保持不变。我们还给出 $O(CN)$ 审计协议与逐样本扩展，逐样本状态差异（Per-Sample State Disparity, PSSD；附录~\ref{app:pssd}）。
+\end{enumerate}
+
+% =============================================================================
+% §2 问题设置与谱框架
+% =============================================================================
+\section{问题设置与谱框架}
+\label{sec:channel}
+
+\subsection{问题设置}
+
+设 $D = \{(x_i, y_i)\}_{i=1}^N$ 为训练集，$\theta_0 = \mathcal{A}(D)$ 为训练所得参数，$D_f \subset D$ 为遗忘集，$D_r = D \setminus D_f$ 为保留集，并令 $N_f = |D_f|$、$N_r = |D_r|$。遗忘算法 $\mathcal{U}$ 产生 $\theta' = \mathcal{U}(\theta_0, D_f, D_r)$。我们通过输出分布来量化残差依赖 $I(D_f; \theta' \mid \theta_0)$。
+
+我们聚焦于\textbf{类级遗忘}，其中 $D_f$ 由整个语义类的全部样本组成。这一情形暴露出样本级遗忘可能掩盖的谱结构。
+
+\subsection{经验输出通道矩阵}
+
+设 $f_{\theta'}$ 为 logit 函数，$\mathbf{p}(x;\theta') = \mathrm{Softmax}(f_{\theta'}(x)) \in \Delta^{C-1}$。所有量都由 softmax 概率向量而非硬（argmax）预测计算，抽象通道变量 $Y$（定理~\ref{thm:perfect}）是从 $p_c(x;\theta')$ 抽取的类；因此该证书涉及概率输出行为，而非标签一致性。
+
+\begin{definition}[经验输出通道矩阵]
+\label{def:M}
+\begin{equation}
+\mathbf{M}(\theta') =
+\begin{bmatrix}
+\boldsymbol{\mu}_f^\top \\ \boldsymbol{\mu}_r^\top
+\end{bmatrix}
+\in \mathbb{R}^{2\times C},
+\qquad
+\begin{aligned}
+\boldsymbol{\mu}_f &= \frac{1}{N_f}\sum_{x\in D_f} \mathbf{p}(x;\theta'),\\
+\boldsymbol{\mu}_r &= \frac{1}{N_r}\sum_{x\in D_r} \mathbf{p}(x;\theta').
+\end{aligned}
+\end{equation}
+\end{definition}
+
+对定义~\ref{def:M} 的通道矩阵，其 SVD 为 $\mathbf{M} = \sigma_1 \mathbf{u}_1 \mathbf{v}_1^\top + \sigma_2 \mathbf{u}_2 \mathbf{v}_2^\top$，其中 $\sigma_1 \ge \sigma_2 \ge 0$。奇异值平方是 $2\times 2$ Gram 矩阵 $\mathbf{M}\mathbf{M}^\top$ 的特征值；当 $\|\boldsymbol{\mu}_f\| = \|\boldsymbol{\mu}_r\|$ 时，有 $\|\boldsymbol{\mu}_f - \boldsymbol{\mu}_r\|_2 = \sqrt{2}\,\sigma_2$。
+
+\subsection{残差不可逆指数（RII）}
+
+\begin{definition}[RII]
+\label{def:rii}
+\begin{equation}
+\rho(\theta') \coloneqq 1 - \frac{\sigma_1^2}{\sigma_1^2 + \sigma_2^2}
+= \frac{\sigma_2^2}{\sigma_1^2 + \sigma_2^2}
+\;\in\; [0,\,0.5].
+\label{eq:rho}
+\end{equation}
+\end{definition}
+
+性质：(i) $\rho = 0 \iff \sigma_2 = 0 \iff \boldsymbol{\mu}_f = \boldsymbol{\mu}_r$（完美遗忘）；(ii) 当 $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$ 且 $\boldsymbol{\mu}_f \perp \boldsymbol{\mu}_r$ 时 $\rho = 0.5$；(iii) 尺度不变；(iv) 当 $\rho \ll 1$ 时 $\rho \approx \sigma_2^2/\sigma_1^2$。
+
+定义~\ref{def:rii}（式~\eqref{eq:rho}）将 $\rho$ 定义为一种谱残差能量（输出通道的归一化第二奇异值），而非互信息值。其信息论含义由定理~\ref{thm:mi_bound} 确立：当 $\rho\ll1$ 时 $I(X;Y\mid\theta')\le O(\rho)$，因此 $\rho$ 在互信息消失时精确消失，并在小泄漏时上界它。
+
+\paragraph{统计依据。}
+行 $\boldsymbol{\mu}_f, \boldsymbol{\mu}_r$ 是经验蒙特卡洛平均：当 $N_f\to\infty$ 时 $\hat{\boldsymbol{\mu}}_f\to\boldsymbol{\mu}_f^*$，收敛速度 $O_p(1/\sqrt{N_f})$，因此秩一条件是关于\emph{群体级}统计不可区分性的论断（有限样本保证见命题~\ref{prop:confidence}）。
+
+% =============================================================================
+% §3 类级遗忘与 MHPR
+% =============================================================================
+\section{类级遗忘与 MHPR}
+\label{sec:class_baselines}
+
+在类级遗忘中，遗忘行与保留行平均的是根本不同的分布：$\boldsymbol{\mu}_f$ 来自模型训练中从未见过的类。因此即使完美遗忘，两行也可能不同，从而抬高标准 RII。
+
+\subsection{单一留出类（LOCO）失效}
+
+用单个留出未见类的均值替换 $\boldsymbol{\mu}_r$（LOCO）会失败，因为不同未见类产生系统不同的预测轮廓：在 MNIST 上（在 $\{1,2,3,4,6,7,8,9\}$ 上训练，遗忘类~5，留出类~0），$\rho_{\mathrm{LOCO}}{\approx}0.38$ 超过标准 RII ${\approx}0.14$，与预期方向相反。
+
+\subsection{多留出投影残差（MHPR）}
+\label{sec:mhpr}
+
+MHPR 使用 $K \ge 2$ 个留出未见类，并将遗忘类均值投影到它们的张成子空间上，从而消除单类偏差。
+
+\begin{definition}[MHPR]
+\label{def:mhpr}
+设 $\mathcal{H} = \{c_{h1},\dots,c_{hK}\}$ 为 $K$ 个留出类，均值向量为 $\boldsymbol{\mu}_{h_k}$，并令 $\mathbf{H} = [\boldsymbol{\mu}_{h_1},\dots,\boldsymbol{\mu}_{h_K}]^\top$。MHPR 定义为：
+\begin{equation}
+\rho_H(\theta') \coloneqq \frac{\|\boldsymbol{\mu}_f - \mathbf{H}^+ \mathbf{H} \boldsymbol{\mu}_f\|_2^2}{\|\boldsymbol{\mu}_f\|_2^2} \in [0,1].
+\end{equation}
+\end{definition}
+
+与谱 RII $\rho\in[0,0.5]$（$2\times C$ 通道的归一化第二奇异值）不同，$\rho_H$ 是遗忘类均值在留出子空间上的\emph{投影残差的相对能量}；归一化对象不同（谱能量比 vs.\ 几何残差范数比）正是两者取值区间不同的原因。一个注意点是按 $\|\boldsymbol{\mu}_f\|_2^2$ 归一化：当模型对遗忘类接近均匀（例如重度遗忘或退化下）时，$\|\boldsymbol{\mu}_f\|_2$ 很小，残差比例会放大估计噪声；此时未归一化的谱 RII 是更稳定的量。
+
+\paragraph{性质。}
+对定义~\ref{def:mhpr} 的 MHPR：(1) 单调：当 $K_2 \ge K_1$ 时 $\rho_H(K_2) \le \rho_H(K_1)$（命题~\ref{prop:mhpr_monotone}）。(2) 优于 LOCO：当 $K\ge 2$ 时 $\rho_H(K) \le \rho_H(1)$。(3) 偏差--方差：在 $\mathcal{H}_0$（理想遗忘）下，$\mathbb{E}[\rho_H] = O(CK/N_{\min})$（命题~\ref{prop:mhpr_bias}）；当 $K=O(1)$ 时为 $O(C/N_{\min})$。(4) 有限样本界：$|\hat{\rho}_H - \rho_H^*|$ 以 $O(1/\sqrt{N_{\min}})$ 衰减并带显式常数（命题~\ref{prop:mhpr_confidence}）。证明见附录。
+
+\paragraph{温度缩放。}
+当 softmax 输出过度集中（准确率 $\lesssim 90\%$）时，留出类均值向量可能近乎共线，将子空间 $\mathcal{S}_K$ 坍缩为一维流形；我们在一次 Fashion-MNIST 运行中观察到这种坍缩（$\rho_H\approx1$），但在三个种子上它是种子依赖的而非系统性的（第~\ref{sec:benchmark}~节）。
+
+一个简单补救是温度缩放：$\mathbf{p}_T(x) = \mathrm{Softmax}(f_{\theta'}(x)/T)$。当 $T\to\infty$ 时，$\mathbf{p}_T \to \mathbf{1}/C$（均匀），留出子空间变得良态。我们选择满足条件数 $\kappa(\mathbf{H}(T)) < 10$ 的最小 $T\in\{1,2,5,10,50,100\}$。在 Fashion-MNIST 上选得 $T=50$（$\rho_H = 0.021$），在 CIFAR-10 上 $T=5$（$\rho_H = 0.025$）。对高精度模型（MNIST，$\sim97.5\%$），$T=1$ 即可；该选择背后的保序性质在命题~\ref{prop:rank_preserve}（附录~\ref{app:temp}）中证明。对 $T$ 的扫描确认该准则不牺牲信号：在 Fashion-MNIST 与 CIFAR-10 上，softmax RII 在 $T{=}5$ 附近达到峰值，并在 $T{=}10$ 时下降一个数量级以上，随 $T\to\infty$ 趋于零，因此在满足条件数约束的温度中，最小的可接受温度也最可判别。
+
+\subsection{logit 状态与 softmax RII 的桥接}
+\label{sec:logit_bridge}
+
+将 logits 量化为 $m$ 个状态（在训练 logits 上做 $k$-means）得到状态分布 $\boldsymbol{\pi}_c\in\Delta^{m-1}$。全文约定 $\chi^2(P\|Q)\coloneqq\sum_i (P_i-Q_i)^2/Q_i$ 表示 $\chi^2$ 散度。状态空间 RII $\rho_{\mathcal{S}}$ 逼近 softmax RII（定理~\ref{thm:state_bridge}，附录~\ref{app:bridge}）；在状态空间中，MHPR 有一个干净的 $\chi^2$ 界：
+
+\begin{theorem}[基于 $\chi^2$ 控制的状态空间 MHPR]
+\label{thm:state_mhpr}
+设 $\boldsymbol{\pi}_f$ 为遗忘状态分布，$\bar{\boldsymbol{\pi}}_H = \frac{1}{K}\sum_k \boldsymbol{\pi}_{h_k}$。若 $\chi^2(\boldsymbol{\pi}_f \| \bar{\boldsymbol{\pi}}_H) \le \tau^2$ 且 $\|\boldsymbol{\pi}_f\|_2^2 \ge \gamma > 0$，则
+\begin{equation}
+\rho_{H,\mathcal{S}} \le \frac{\tau^2}{\gamma}.
+\label{eq:state_mhpr}
+\end{equation}
+因此 MHPR 是状态空间输出级不可区分性的一致代理。
+\end{theorem}
+
+经验验证（附录~\ref{app:chi2}）确认式~\eqref{eq:state_mhpr} 的界，即对所有梯度上升步均有 $\rho_{H,\mathcal{S}} \le \chi^2/\|\boldsymbol{\pi}_f\|_2^2$。其余状态空间结果（量化误差，引理~\ref{lem:quantization}；谱桥，定理~\ref{thm:state_bridge}；MHPR 偏差率，定理~\ref{thm:softmax_deviation}）推迟到附录~\ref{app:bridge}。
+
+% =============================================================================
+% §4 理论结果
+% =============================================================================
+\section{理论结果}
+\label{sec:theory}
+
+\subsection{假设与实践有效性}
+\label{sec:assumptions}
+
+表~\ref{tab:assumptions} 列出每个理论结果背后的假设及其在本文实验设定中的状态；随后我们讨论审稿人可能质疑的假设。
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{每个理论结果背后的假设及其在实验设定中的实践有效性。}\label{tab:assumptions}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{p{2.0cm} p{4.9cm} p{4.8cm}}
+\toprule
+结果 & 关键假设 & 在我们设定中的有效性 \\
+\midrule
+定理~\ref{thm:perfect} & $Y$ 是从 softmax 分布 $p_c(x;\theta')$ 抽取的类，而非 argmax 标签 & 按构造成立：所有量都由 softmax 概率向量计算（第~\ref{sec:channel}~节） \\
+命题~\ref{prop:confidence} & softmax 向量 sub-Gaussian，方差代理 $\nu^2$；$\sigma_1>0$ & $p_c\in[0,1]$ 有界，故 sub-Gaussian 且 $\nu=1$（下文）；$\sigma_1>0$ 因行是非零概率向量 \\
+定理~\ref{thm:finetune} & $L$-Lipschitz 梯度与 softmax；小步条件 $\lambda\|\mathbf{g}\|_2=O(1)$ & 实践中（尤其 LoRA 下，参数空间小）有界；$\lambda{\sim}10^{-5}$ 满足条件 \\
+定理~\ref{thm:mi_bound} & $\pi_{\min}=\min_y(\boldsymbol{\mu}_r)_y>0$；等范数（渐近放宽） & 经验通道有 $\pi_{\min}\ge 1/N_r>0$（下文）；等范数渐近放宽（证明见附录~\ref{sec:appendix}） \\
+定理~\ref{thm:unified} & 高斯信号模型 $R=\alpha X+\beta Y+N$；小 $\alpha,\eta$ & 理想化；模型下精确，否则一阶成立（注记~\ref{rem:unified_status}） \\
+MHPR 命题 & 留出子空间良态（$\sigma_{\min}(\mathbf{H}^*)>0$）；有限样本集中 & 当子空间否则会坍缩时，用 $K\ge2$ 与温度缩放保证（第~\ref{sec:mhpr}~节） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{实践有效性。}(i) \emph{sub-Gaussian softmax。}softmax 向量的每个坐标都落在 $[0,1]$ 内，故有界因而 sub-Gaussian：由 Hoeffding 引理，支撑在 $[0,1]$ 上的变量以 $1/4$ 为方差代理，我们用 $\nu=1$ 作为保守上界。因此命题~\ref{prop:confidence} 以显式常数成立且无未知分布参数。(ii) \emph{$\pi_{\min}>0$。}在每一个实验中每个类在保留集上至少出现一次，故经验 $\pi_{\min}\ge 1/N_r>0$；对类数非常多的人群通道，注记~\ref{rem:pi_min} 的截断支撑论证适用。(iii) \emph{$L$-Lipschitz 梯度与 softmax。}softmax 映射对 logit 输入是 $1$-Lipschitz 的，梯度 Lipschitz 常数是损失 Hessian 的谱范数，在本文考虑的（小）参数空间下——尤其 LoRA 适配器只更新少数低秩因子——有界。我们不依赖具体值：定理~\ref{thm:finetune} 的界是小步长时 $\rho=O(\lambda^2)$ 的定性陈述。(iv) \emph{类级遗忘下的交叉协方差。}引理~\ref{lem:cross_cov}（附录~\ref{app:finetune}）依赖不同类别的 logit 梯度在良训练分类器下近似正交，这在分类器自信（$p_f(c_f)\approx1$）时成立；附录给出推导。
+
+\subsection{伪代码}
+\label{sec:pseudocode}
+
+为可复现性，我们以伪代码给出 RII、MHPR 与推荐审计协议的计算（伪代码与英文版一致，保持代码为英文）；实现见 \url{https://github.com/EurusDemerzel/rii_unlearning}。
+
+{\small\begin{verbatim}
+Algorithm 1: Compute RII rho
+  Input:  model theta', forget set D_f, retain set D_r
+  1. mu_f <- mean_x in D_f Softmax(f_{theta'}(x))
+  2. mu_r <- mean_x in D_r Softmax(f_{theta'}(x))
+  3. M <- [mu_f ; mu_r]            # 2 x C channel matrix
+  4. sigma_1, sigma_2 <- singular values of M
+  5. rho <- 1 - sigma_1^2/(sigma_1^2 + sigma_2^2)
+  Output: rho
+
+Algorithm 2: Compute MHPR rho_H
+  Input:  model theta', forget set D_f, held-out means H = [mu_h1 ... mu_hK]
+  1. mu_f <- mean_x in D_f Softmax(f_{theta'}(x))
+  2. P <- H^+ H                     # projection onto held-out span
+  3. rho_H <- ||mu_f - P mu_f||^2 / ||mu_f||^2
+  Output: rho_H
+
+Algorithm 3: Recommended audit protocol
+  1. Sample N_min examples from D_f, D_r (and each held-out class for MHPR)
+  2. Compute rho (or rho_H); apply temperature scaling if accuracy <~ 90%
+  3. Report [rho - eps, rho + eps] as a high-probability interval (1 - delta)
+  4. Report MIA AUC alongside RII for a two-axis assessment
+\end{verbatim}}
+
+\begin{theorem}[输出分布不可逆性]
+\label{thm:perfect}
+设 $X\in\{0,1\}$ 为遗忘集成员指示变量（$X{=}1$ 表示遗忘、$X{=}0$ 表示保留，下文简写为 $X{=}f$ 与 $X{=}r$），$Y\in\{1,\dots,C\}$ 为模型在 $\theta'$ 下的类别输出：对输入 $x$，通道以概率 $p_c(x;\theta')$ 发射 $Y{=}c$，从而由全概率公式 $P(Y{=}c\mid X{=}f)=(\boldsymbol{\mu}_f)_c$ 且 $P(Y{=}c\mid X{=}r)=(\boldsymbol{\mu}_r)_c$（注记~\ref{rem:channel}）。则
+\begin{equation}
+\rho(\theta') = 0 \;\Longleftrightarrow\; \boldsymbol{\mu}_f = \boldsymbol{\mu}_r \;\Longleftrightarrow\; I(X; Y \mid \theta') = 0.
+\end{equation}
+因此 $\rho=0$ 是\emph{通道级}（均值输出）分布不可逆性的充要条件：通道的类别发射独立于遗忘集成员。逐样本输出分布不由 $\rho$ 证明（注记~\ref{rem:channel}）。
+\end{theorem}
+
+\begin{proof}
+$\rho=0 \Rightarrow \sigma_2=0 \Rightarrow \mathbf{M}$ 秩为 1。两行都是和为 1 的概率向量，因此 $\boldsymbol{\mu}_f = \lambda\boldsymbol{\mu}_r$ 且 $\lambda>0$；和为一迫使 $\lambda=1$，故 $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$。由全概率公式，$(\boldsymbol{\mu}_f)_c = \frac{1}{N_f}\sum_{x\in D_f}p_c(x;\theta') = \frac{1}{N_f}\sum_{x\in D_f}P(Y{=}c\mid x;\theta') = P(Y{=}c\mid X{=}f)$，同理 $(\boldsymbol{\mu}_r)_c = P(Y{=}c\mid X{=}r)$；因此 $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$ 恰为 $P(Y\mid X{=}f)=P(Y\mid X{=}r)$，即 $Y\perp X\mid\theta'$ 且 $I(X;Y\mid\theta')=0$。反向立即成立：$I(X;Y\mid\theta')=0$ 迫使 $P(Y\mid X{=}f)=P(Y\mid X{=}r)$，即 $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$，故 $\sigma_2=0$ 且 $\rho=0$。
+\end{proof}
+
+\begin{remark}[该准则证明什么——以及不证明什么]
+\label{rem:channel}
+一个自然的顾虑是 $\boldsymbol{\mu}_f=\boldsymbol{\mu}_r$ 只是一阶矩条件：逐样本输出\emph{均值}相等并不意味着 $\mathbf{p}(x)$ 在 $D_f$ 与 $D_r$ 上的\emph{分布}相等。此顾虑针对的是\emph{逐样本}不可区分性，而非\emph{通道}证书。因为 $Y$ 是取值 $C$ 的类别变量，其条件分布 $P(Y\mid X{=}f)$ \emph{就是} $C$ 维向量 $\boldsymbol{\mu}_f$（由全概率公式），所以均值相等恰等于通道条件发射分布相等：无需指数族或充分统计量假设。若 $Y$ 是连续 softmax 向量本身，一阶矩保留警告才会生效；那是逐样本层面，$\rho$ 不证明它，而由 PSSD 得分（定义~\ref{def:isd}，附录~\ref{app:pssd}）处理：两个集合可以共享相同通道，同时个别样本保留异常的 logit 状态，因此即使 $\rho=0$，PSSD 也可能非零。
+\end{remark}
+
+\begin{proposition}[有限样本置信]
+\label{prop:confidence}
+设 $\rho^*$ 为真实通道矩阵 $\mathbf{M}^*$ 的总体 RII，$\hat{\rho}$ 为由 $N_f, N_r$ 个样本得到的估计。对方差代理为 $\nu^2$ 的次高斯 softmax 向量，
+\begin{equation}
+\mathbb{P}\!\left(|\hat{\rho} - \rho^*| \le \frac{4\nu}{\sigma_1}\sqrt{\frac{C\log(4C/\delta)}{N_{\min}}}\right) \ge 1-\delta,
+\end{equation}
+其中 $N_{\min}=\min(N_f,N_r)$。要以置信度 $1-\delta$ 实现误差 $\le\varepsilon$，需从每个集合采样 $N_{\min} \ge 16C\nu^2\log(4C/\delta)/(\sigma_1^2\varepsilon^2)$。
+\end{proposition}
+
+\begin{theorem}[微调泄漏界]
+\label{thm:finetune}
+对单步梯度上升 $\theta' = \theta_0 + \lambda\mathbf{g}$（$\mathbf{g}=\nabla_\theta\mathcal{L}(\theta_0, D_f)$），其中梯度 $L$-Lipschitz 且 softmax 映射 $L$-Lipschitz，且步长 $\lambda$ 满足小步条件 $\lambda\|\mathbf{g}\|_2=O(1)$，
+\begin{equation}
+\rho(\theta') \le \frac{\lambda^2 L^2}{2\sigma_1^2}\,\operatorname{Tr}\bigl(\boldsymbol{\Sigma}_f\bigr) + O(\lambda^3),
+\label{eq:finetune_bound}
+\end{equation}
+其中 $\boldsymbol{\Sigma}_f \coloneqq \operatorname{Cov}_{x\sim D_f}(\nabla_\theta f_{\theta_0}(x))$ 是遗忘集上 logit 映射的梯度协方差，$\sigma_1$ 是 $\theta_0$ 处通道的首个奇异值。不假设对 $\mathbf{g}$ 做归一化；其尺度通过小步条件与 $\operatorname{Tr}(\boldsymbol{\Sigma}_f)$（它下界平均平方梯度范数：$\operatorname{Tr}(\boldsymbol{\Sigma}_f)=\mathbb{E}\|\nabla_\theta f-\mathbb{E}\nabla_\theta f\|_2^2\le\mathbb{E}\|\nabla_\theta f\|_2^2$）进入。因此小步长时 $\rho = O(\lambda^2)$。
+\end{theorem}
+
+\begin{remark}[定理~\ref{thm:finetune} 的适用范围]
+该界是局部的：它在轨迹停留在 $\theta_0$ 的 $L$-Lipschitz 邻域内时成立，这由小步条件保证。等价地，可将上升方向归一化并把 $1/\|\mathbf{g}\|_2$ 吸收进 $\lambda$ 的定义；除有效步长的重新缩放外，陈述不变。在实际使用的学习率（$\lambda{\sim}10^{-5}$，$\|\mathbf{g}\|_2$ 量级为 1）下，该条件被舒适地满足。
+\end{remark}
+
+\paragraph{类级遗忘：受控误差分析。}
+对类级遗忘（$D_f$ = 类 $c_f$ 的全部样本），$D_f$ 与 $D_r$ 上的梯度相关。交叉熵损失有特殊结构，使我们能控制这种相关。其 logit 梯度为 $\nabla_z\ell(z,y)=\mathbf{p}(z)-\mathbf{e}_y$，其中 $\mathbf{e}_y$ 为 one-hot 向量。对来自不同类 $c_f\neq c_r$ 的样本：
+\begin{equation}
+\langle\nabla_z\ell_f,\nabla_z\ell_r\rangle = \langle\mathbf{p}_f,\mathbf{p}_r\rangle - p_f(c_r) - p_r(c_f).
+\end{equation}
+在 $\theta_0$（训练良好的分类器）处，$p_f(c_f){\approx}1$ 且 $p_r(c_r){\approx}1$，故此内积 $\approx0$。经过 $\lambda$ 梯度步后，logits 位移 $O(\lambda)$，且 softmax $1$-Lipschitz 连续性给出 $\|\nabla_z\ell' - \nabla_z\ell\|_2\le\|\Delta z\|_2 = O(\lambda)$。因此 $|\langle\nabla_z\ell'_f,\nabla_z\ell'_r\rangle| = O(\lambda)$，这意味着参数空间交叉协方差 $\boldsymbol{\Sigma}_{fr} \coloneqq \operatorname{Cov}(\nabla_\theta\ell_f,\nabla_\theta\ell_r)$ 满足 $\|\boldsymbol{\Sigma}_{fr}\|_F = O(\lambda)$（引理~\ref{lem:cross_cov}，附录~\ref{app:finetune}）。
+
+因此，类级界保持式~\eqref{eq:finetune_bound} 的 $O(\lambda^2)$ 阶：其 $O(\lambda^3)$ 项吸收交叉协方差贡献（附录~\ref{app:finetune}），且由于 $\|\boldsymbol{\Sigma}_{fr}\|_F = O(\lambda)$ 只增加高阶修正，在实际学习率（$\lambda{\sim}10^{-5}$）下可忽略，故该阶得以保持。
+
+\begin{theorem}[谱 $\chi^2$--MI 界]
+\label{thm:mi_bound}
+对 $\theta'$ 下的二元成员 $X$ 与预测类 $Y$，当通道两行等范数 $\|\boldsymbol{\mu}_f\|_2=\|\boldsymbol{\mu}_r\|_2$（该条件在渐近意义下放宽，见下文）时，
+\begin{equation}
+I(X; Y \mid \theta') \le \frac{\sigma_1^2}{\pi_{\min}}\cdot\frac{\rho}{1-\rho},
+\end{equation}
+其中 $\pi_{\min} \coloneqq \min_y (\boldsymbol{\mu}_r)_y > 0$ 且 $(\boldsymbol{\mu}_r)_y=P(Y{=}y\mid X{=}r)$。当 $\rho\ll 1$ 时，$I \le O(\rho)$；该界随 $\rho\to0$ 消失，并在无等范数条件时渐近成立（证明见附录~\ref{sec:appendix}）。
+\end{theorem}
+
+\begin{remark}[关于 $\pi_{\min}>0$]
+\label{rem:pi_min}
+对经验通道，$(\boldsymbol{\mu}_r)_y$ 是类 $y$ 在保留集上的相对频率，因此只要每个类至少出现一次（本文所有实验的情形）就有 $\pi_{\min}>0$。对类数非常多、某些类概率任意小的人群通道，可将该界应用于截断支撑 $\mathcal{Y}_\epsilon=\{y:(\boldsymbol{\mu}_r)_y>\epsilon\}$，代价是 $O(1/\epsilon)$ 的乘法因子；同样的截断出现在置信界中（命题~\ref{prop:confidence}）。
+\end{remark}
+
+\paragraph{信号模型。}
+我们将观测到的移除后输出建模为 $R = \alpha X + \beta Y + N$，$N \sim \mathcal{N}(0,\sigma^2)$，其中 $X$ 为遗忘/保留指示，$Y$ 为通道输出，$\alpha,\beta$ 为耦合系数。这刻画两条正交的泄漏通路：直接信号泄漏（$\propto \alpha^2$，由 MIA 检测）与覆盖泄漏（$\propto \eta^2$，即对秩一的谱偏离，由 RII 检测）。
+
+\begin{lemma}[小 $\alpha$ Fisher 信息展开]
+\label{lem:fisher}
+对 $R = \alpha X + Z$（$X \perp Z$），当 $\alpha \to 0$ 时：
+$I(X;R) = \frac{\alpha^2}{2}\mathrm{Var}(X)J(Z) + o(\alpha^2)$，其中 $J(Z)$ 为 $Z$ 的 Fisher 信息。对高斯噪声，$J(N) = 1/\sigma^2$。
+\end{lemma}
+
+\begin{theorem}[统一泄漏分解]
+\label{thm:unified}
+在信号模型 $R = \alpha X + \beta Y + N$ 与通道奇异值 $\{\sigma_k\}$ 下，
+\begin{equation}
+I(X; R) \le \frac{\alpha^2}{2\sigma^2}\operatorname{Var}(X) \;+\; \eta^2 \;+\; o(\alpha^2 + \eta^2),
+\end{equation}
+其中 $I_{\mathrm{dir}} \propto \alpha^2$（直接泄漏，由 MIA 测量）且 $I_{\mathrm{cov}} = \eta^2 = \sum_{k\ge 2}\sigma_k^2$（覆盖泄漏，由 RII 测量）。
+\end{theorem}
+
+\begin{remark}[定理~\ref{thm:unified} 的地位]
+\label{rem:unified_status}
+该分解在高斯信号模型下精确成立，并在引理~\ref{lem:fisher} 的正则性下对 $\alpha^2+\eta^2$ 一阶成立（小 $\alpha$、小谱偏离）；为可读性我们以定理陈述之，证明草图见附录~\ref{app:unified}，完整的 $\chi^2$ 控制在附录~\ref{app:bridge_proofs}。
+\end{remark}
+
+\paragraph{正交泄漏轴。}
+MIA 准确率跟踪直接轴 $I_{\mathrm{dir}}$（分布位移）；RII 跟踪覆盖轴 $I_{\mathrm{cov}}$（输出级不可区分性）。两者可以同时很大：它们是泄漏的独立维度（见第~\ref{sec:mia}~节）。
+
+\paragraph{连续类比。}
+离散 $2\times C$ 分析通过 Hilbert--Schmidt 算子理论提升到连续空间，其中偏离参数 $\eta^2=\sum_{k\ge2}\sigma_k^2$ 是定理~\ref{thm:unified} 的基础（附录~\ref{app:bridge}）。
+
+\input{zh_part2}
+\input{zh_part3}
+\input{zh_part4}
+
+\end{document}

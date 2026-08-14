@@ -1,0 +1,364 @@
+% =============================================================================
+% zh_part2.tex — §5 实验评估（逐句对照中文版）
+% =============================================================================
+
+% =============================================================================
+\section{实验评估}
+\label{sec:experiments}
+
+\subsection{设置}
+
+\textbf{数据集与模型：}MNIST（60K，10 类）、Fashion-MNIST（60K，10）、CIFAR-10（50K，10）、CIFAR-100（50K，100；类级协议使用 20 类训练子集）。架构：SimpleMLP（784$\to$128$\to$10）、SmallCNN（3 卷积 + 2 全连接）、ResNet-18、DeepMLP（用于过拟合）。训练：Adam，lr $10^{-3}$，batch 64，10 epoch。语言模型研究（第~\ref{sec:llm}~节）使用 LLaMA-2-7B 上的 TOFU~\cite{maini2024tofu} 作者级基准，采用基于 LoRA 的 PEFT。
+
+\textbf{遗忘方法：}NoUnlearn（不移除）、Retrain（黄金标准）、SISA~\cite{bourtoule2021machine}（$S{=}5$ 分片）、NegGrad（仅在 $D_f$ 上梯度上升）、FineTune（在 $D_f$ 上梯度上升后接在 $D_r$ 上下降）、KED（通过 KL 到均匀的知识侵蚀，作用于 $D_f$）、以及 BadTeacher（在 $D_f$ 上进行错误标签训练）。
+
+\textbf{基准协议。}在第~\ref{sec:benchmark}~节中，我们在 CIFAR-10 上采用标准类级协议：模型在类 $\{0,\dots,6\}$ 上训练，类~3（cat）为遗忘集，类 $\{7,8,9\}$ 留出作为未见 MHPR 参照（$K{=}3$）。Fashion-MNIST 使用相同协议：七个训练类 $\{0,\dots,6\}$，遗忘类~3（Dress），留出类 $\{7,8,9\}$（Sneaker、Bag、Ankle boot）。两种情形下的留出类都是训练切分后的剩余类——按可用性而非语义相似性选择；该选择的影响在第~\ref{sec:benchmark}~节（注意事项~(2)）讨论。为确定性，模型在无数据增强下训练，且每个遗忘方法都用\emph{相同}的指标组评估。
+
+缩写``MIA''在本文中表示三种不同的协议，每个表格都标明其所指：随机遗忘基线中的训练/测试成员推断准确率（表~\ref{tab:main}）；类级基准中的遗忘/保留损失阈值 AUC（表~\ref{tab:benchmark}）；以及 TOFU 上的遗忘集平均下一词 NLL（表~\ref{tab:llm}）。在对比两条泄漏轴时（第~\ref{sec:mia}~节），``MIA''指训练/测试成员准确率。
+
+跨下面的实验，标准训练产生近秩一输出通道（$\rho<5\times10^{-3}$），使 RII 成为稳定、无需调参的量：随机样本级遗忘平凡地不可区分，而类级遗忘不是（第~\ref{sec:benchmark}~节）。在类级遗忘下，RII 与 MHPR 对遗忘方法的排序与遗忘强度一致，并揭示出留下（甚至增强）输出签名而准确率与 MIA 都错过的那些方法；在 TOFU 基准上的 70 亿参数语言模型上（第~\ref{sec:llm}~节），即使所有已遗忘检查点都将生成准确率饱和在 100\%，同样排序仍然成立。最后，RII 与 MIA 度量重叠但不同的泄漏轴（$r{=}0.57$），因此完整审计应同时报告两者。
+
+\subsection{基线：标准训练下的近秩一输出}
+
+虽然本工作聚焦类级遗忘，我们首先建立一个简短的随机（样本级）基线：它分离出标准训练的近秩一结构，并表明 RII 并不退化，因为随机子集平凡地不可区分，而内聚的语义类（第~\ref{sec:mhpr}~节与第~\ref{sec:benchmark}~节）则不然。这些结果仅作为控制基线。
+
+\begin{table}[t]
+\centering
+\small
+\caption{秩一基线：标准训练下的 RII（5\% 随机遗忘；所有行均为 NoUnlearn）。MIA 是训练/测试成员推断准确率（第~\ref{sec:mia}~节），而非遗忘/保留损失阈值 AUC。}\label{tab:main}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c c}
+\toprule
+数据集 & 方法 & Acc.(\%) & $\rho$ & MIA(\%) \\
+\midrule
+MNIST & NoUnlearn & 97.45 & $9.762\times10^{-4}$ & 90.4 \\
+\midrule
+CIFAR-10 & NoUnlearn & 76.1 & $1.20\times10^{-3}$ & 90.5 \\
+CIFAR-100 (SmallCNN) & NoUnlearn & 20.8 & $7.10\times10^{-4}$ & 90.5 \\
+Fashion-MNIST & NoUnlearn & 88.7 & $2.83\times10^{-4}$ & 90.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+表~\ref{tab:main} 揭示四点关键发现。第一，$\rho<5\times10^{-3}$ 一致成立：标准神经网络训练产生近秩一输出通道。第二，$\rho$ 与准确率无关：CIFAR-100 在 20\% 准确率下给出的 $\rho$ \emph{低于} MNIST 在 97.5\% 下的值，证实秩一性质是 softmax 输出单纯形固有的。第三，不同遗忘方法给出几乎相同的 $\rho$（我们在 MNIST 上验证了 Retrain、SISA 与 FineTune），这是预期的：对随机子集，模型的泛化使输出即使不做显式遗忘也不可区分。第四，在 10 个随机种子下，$\rho$ 的标准差 $<3.5\times10^{-4}$，支持可靠的单次审计。因此在随机遗忘下 RII 近乎平凡（所有方法不可区分），而类级遗忘正是 RII 与 MHPR 变得可判别的区间（第~\ref{sec:mhpr}~节与第~\ref{sec:benchmark}~节）。
+
+\subsection{70 亿参数语言模型上的 RII（TOFU）}
+\label{sec:llm}
+
+上述基准是视觉的；我们接下来检验该证书能否经受尺度与模态的迁移，即迁移到当代指令微调语言模型。我们在 \emph{LLaMA-2-7B}（官方 TOFU 微调检查点）上运行标准 TOFU~\cite{maini2024tofu} 作者级协议，遗忘集 $=$ 一位作者（40 个 QA 对），保留划分为 90 位作者，采用实践者实际部署的 PEFT 方案：LoRA（$r{=}8$，scale~20，作用于 32 层中的 8 层）。方法：NoUnlearn（检查点原样）、FineTune（在保留答案上 60 步 LoRA，AdamW $10^{-5}$）、NegGrad（在遗忘答案上 10 步 LoRA 梯度上升，SGD $2{\times}10^{-5}$），以及 Retrain oracle（基座 LLaMA-2-7B 加仅在保留集上的 LoRA；基座模型从未见过遗忘作者）。RII 在遗忘与保留 QA 对的平均下一 token softmax 分布构成的 $2\times V$（$V{=}32{,}000$）通道矩阵上计算；MIA 为遗忘集的平均下一 token NLL。
+
+\begin{table}[t]
+\centering
+\small
+\caption{LLaMA-2-7B 上 TOFU 基准的作者级遗忘（基于 LoRA；Retrain 为轻量 60 步 oracle）。}\label{tab:llm}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c c}
+\toprule
+方法 & Forget(\%) & Retain(\%) & RII & MIA \\
+\midrule
+NoUnlearn & 100.0 & 100.0 & $1.16{\times}10^{-1}$ & 1.348 \\
+FineTune & 100.0 & 100.0 & $9.73{\times}10^{-2}$ & 0.852 \\
+NegGrad & 100.0 & 100.0 & $\mathbf{1.17{\times}10^{-1}}$ & 1.352 \\
+Retrain (oracle) & 80.0 & 65.0 & $\mathbf{8.01{\times}10^{-2}}$ & 2.163 \\
+\bottomrule
+\end{tabular}
+\par\vspace{2pt}\footnotesize MIA 是遗忘集的平均下一 token NLL，\emph{不是} AUC；值越大表示遗忘越强。
+\end{table}
+
+三个遗忘后的检查点（以及未触动模型）都能完美回答遗忘问题（Forget$=$100\%；许多 TOFU 答案可以直接从问题本身恢复），因此生成准确率无法区分它们。相比之下，RII 将 FineTune 排在 NoUnlearn 之下（$9.73{\times}10^{-2}$ 对比 $1.16{\times}10^{-1}$，$-16\%$），与视觉基准的排序相同，并将（轻量、60 步的）重训练 oracle（$8.01{\times}10^{-2}$）与未触动模型区分开 $1.45\times$。oracle 另外还可由生成准确率（80\% 对比 100\%）与其大得多的 MIA（2.163 对比 1.348）区分；此处的声明更窄：在生成准确率饱和于 100\% 的检查点中，RII 提供了准确率无法给出的排序。我们不声称仅凭 RII 就能区分 NegGrad 与 NoUnlearn：它们的差距（$1.7{\times}10^{-3}$）落在评估噪声内（见下文）。
+
+NegGrad 的 RII（$1.17{\times}10^{-1}$）在评估噪声内与 NoUnlearn（$1.16{\times}10^{-1}$）不可区分，不同于 FineTune 的 16\% 下降；其 MIA（1.352）同样匹配 NoUnlearn（1.348）。因此上升在此不产生可测量的输出空间擦除，而下面的强度扫描表明，随着上升加强，遗忘输出签名\emph{增强}（在 $3\times$ 强度时升至 $1.20{\times}10^{-1}$，随后模型崩溃），这是第~\ref{sec:benchmark}~节 CIFAR-10/100 上所述隐藏失败的 7B 类比。
+
+在保留答案上继续 LoRA 训练使遗忘与保留输出分布靠拢（$\rho{=}9.73{\times}10^{-2}$，$-16\%$）并取得最低 MIA（0.852；模型对遗忘集仍最流畅），与视觉结果一致；如第~\ref{sec:rebound}~节所述，RII 降低是真擦除的必要而非充分条件，因为遗忘准确率仍为 100\%。
+
+为衡量评估稳定性，我们对评估集做三次随机子采样重复评估；每种方法的 RII 标准差低于 $3.5{\times}10^{-3}$（相对 $<$3\%），且排序 Retrain $<$ \allowbreak FineTune $<$ \allowbreak NoUnlearn ${\approx}$ \allowbreak NegGrad 在所有种子下不变，NegGrad 与 NoUnlearn 之间的差距（$1.7{\times}10^{-3}$）在噪声内。子采样均值（基于子采样集计算，因此不与表~\ref{tab:llm} 的完整集数值直接可比）分别为 $0.088\pm0.003$（oracle）、$0.107\pm0.002$（FineTune），NoUnlearn 与 NegGrad 均为 $0.127\pm0.002$。
+
+在小模型 Qwen2.5-0.5B pilot（第~\ref{sec:benchmark}~节）上，词表级通道无法将 oracle 与未触动模型区分开，因为在 0.5B 规模下两个答案集诱导出统计上相似的文本分布。在 7B 规模下，区分显著（$1.45\times$，三次子采样区间无重叠）：更大模型在下一 token 分布中更强地编码作者身份，因此即使原始词表通道也携带类级信号。因此通道\emph{语义}决定判别力（类级头仍是推荐的审计对象），而模型容量决定原始通道是否足够（参见注记~\ref{rem:channel}）。
+
+我们还对梯度上升强度（步数 $\times$ 学习率）做扫描，从基线 $10\times 2{\times}10^{-5}$ 到 $30\times 10^{-4}$（$3\times$ 步数，$5\times$ lr）与 $60\times 2{\times}10^{-4}$（$6\times$ 步数，$10\times$ lr），始终从全新的零 LoRA 出发。在中等强度下，RII 进一步\emph{上升}到 $1.20{\times}10^{-1}$（高于 NoUnlearn 的 $1.16{\times}10^{-1}$），而遗忘/保留准确率保持在 100\%：隐藏失败并不饱和——更强的上升锐化遗忘输出签名。在最强设置下模型开始崩溃：MIA 跳到 5.25（从 1.35），上升损失发散到 6.5，而 RII 回落到 $1.01{\times}10^{-1}$，但生成准确率仍是 100\%，因此仅凭准确率仍无法检测崩溃。此处 RII 下降\emph{是因为输出分布退化为近随机噪声}，这巧合地使两个集合看起来又统计相似；崩溃反而由 MIA 标记。因此 RII 是双向的：它随隐藏失败签名增强而上升，随输出分布本身退化而下降，所以低 RII 必须与效用指标（保留准确率、MIA）一起解读，以区分真擦除与模型崩溃，这与第~\ref{sec:mia}~节的两轴审计一致。
+
+\subsection{MUSE 风格长文本书籍遗忘上的 RII}
+\label{sec:muse}
+
+TOFU 是基于问答的（共享格式的短提示）。为检验证书在 MUSE~\cite{shi2024muse} 精神下的长文本知识遗忘（模型先记住一本书，然后被要求遗忘它），我们使用公有领域书籍（Project Gutenberg）。遗忘集为《爱丽丝梦游仙境》（Carroll, 1865）；保留集为《镜中世界》（Carroll, 1871），它是同一作者的续作，风格与遗忘文本可比（使用不同作者《绿野仙踪》的变体给出相同的定性结论，见下文）。teacher 为基座 LLaMA-2-7B 加遗忘书籍上的 200 步 LoRA；四种检查点其余与第~\ref{sec:llm}~节相同：NoUnlearn（teacher 原样）、FineTune（保留书籍上 60 步 LoRA）、NegGrad（遗忘书籍上 15 步 LoRA 梯度上升）、Retrain（基座加仅在保留书籍上的 LoRA）。所有文本用 LLaMA-2 tokenizer 分块；留出块（每集 25 个）与训练块不相交。RII 照旧在 $2\times V$ 通道矩阵上计算；遗忘/保留困惑度为平均下一 token NLL 的 $\exp$，MIA 为遗忘集平均 NLL。
+
+\begin{table}[t]
+\centering
+\small
+\caption{LLaMA-2-7B 上 MUSE 风格长文本书籍遗忘（遗忘：《爱丽丝梦游仙境》；保留：《镜中世界》；基于 LoRA；Retrain 为轻量 60 步 oracle）。}\label{tab:muse}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c c}
+\toprule
+方法 & 遗忘PPL & 保留PPL & RII & MIA \\
+\midrule
+NoUnlearn & 1.97 & 3.39 & $1.18{\times}10^{-2}$ & 0.676 \\
+FineTune & 1.96 & $\mathbf{3.22}$ & $1.05{\times}10^{-2}$ & 0.674 \\
+NegGrad & 1.97 & 3.40 & $1.18{\times}10^{-2}$ & 0.676 \\
+Retrain (oracle) & $\mathbf{2.00}$ & 3.29 & $1.26{\times}10^{-2}$ & $\mathbf{0.691}$ \\
+\bottomrule
+\end{tabular}
+\par\vspace{2pt}\footnotesize 遗忘PPL/保留PPL 为留出块上平均下一 token NLL 的 $\exp$；遗忘困惑度越高表示遗忘越强。MIA 为遗忘集平均下一 token NLL（越高表示遗忘越强）。粗体标记每列最被遗忘的检查点。
+\end{table}
+
+表~\ref{tab:muse} 报告了结果。teacher 确实学会了遗忘书籍：遗忘困惑度从 2.11（基座）降到 1.97，而保留困惑度保持在基座水平附近（3.52 到 3.39）。余量很小，因为这些公有领域书籍已存在于基座模型的预训练语料中——这是使用真实书籍的一个诚实局限。在遗忘下，遗忘困惑度将 Retrain 排序为最强擦除（2.00，最高值），其次为 FineTune（1.96）与 NoUnlearn（1.97）；MIA 一致（Retrain 0.691，其余 0.674--0.676）。NegGrad 是显著结果：15 步上升后——在单独运行中 50 步后——其遗忘困惑度、MIA 与 RII 与 NoUnlearn 在四位有效数字内不可区分（1.97、0.676、$1.18{\times}10^{-2}$）。因此梯度上升在长文本上同样不产生可测量的输出空间擦除，这是第~\ref{sec:llm}~节 TOFU 结果的书籍域类比。FineTune 反而降低保留困惑度（3.39 到 3.22，$-5\%$）同时使遗忘困惑度基本不变（1.97 到 1.96），再次匹配 TOFU 中持续微调保留遗忘流畅度的模式。
+
+原始词表通道上的 RII \emph{无法}分离这些检查点。所有方法落在 $[1.05{\times}10^{-2}, 1.26{\times}10^{-2}]$，未触动基座模型的参考值（$1.34{\times}10^{-2}$）高于其中大多数；按困惑度是最强擦除的 Retrain 反而具有\emph{最高} RII（$1.26{\times}10^{-2}$）。原因是结构性的：遗忘与保留是两本不同的书，因此无论模型记住什么，它们的下一 token 分布都不同——RII 度量的是书籍的固有差异而非遗忘状态。同作者保留将基线减半（从不同作者《绿野仙踪》保留的 $2.58{\times}10^{-2}$ 到《镜中世界》的 $1.34{\times}10^{-2}$），但原始词表通道仍无法对方法排序。这是注记~\ref{rem:channel} 预测的长文本情形：通道语义决定判别力，原始词表通道仅在遗忘与保留集诱导可比输出分布时（如 TOFU 的 QA 对）才具信息量；对不同的书籍，类级输出头（例如书籍分类头）是推荐的审计对象。因此我们报告书籍研究作为 RII 适用处与必须补充处的证据，连同确实成立的困惑度/MIA 排序；在两种保留变体（同作者与不同作者）上，NegGrad 都与 NoUnlearn 保持不可区分，Retrain 取得最高遗忘困惑度。
+
+\subsection{统一协议下的基准比较}
+\label{sec:benchmark}
+
+表~\ref{tab:benchmark} 在上述协议下用单一指标组评估七种遗忘方法：保留/遗忘准确率、RII $\rho$、MHPR（$K{=}3$）、MIA（损失阈值 AUC）、倒数第二层特征上的表示级 MMD，以及试图分离遗忘类特征与留出未见类特征的残差线性探针。
+
+\begin{table}[t]
+\centering
+\small
+\caption{CIFAR-10 上的类级遗忘基准（遗忘 cat，$K{=}3$ 留出）；三个种子的均值 $\pm$ 标准差。}\label{tab:benchmark}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l c c c c c}
+\toprule
+方法 & Ret.(\%) & For.(\%) & $\rho$ & MHPR & MIA-loss \\
+\midrule
+NoUnlearn & $92.6{\pm}0.5$ & $85.2{\pm}10.7$ & $0.190{\pm}0.036$ & $0.802{\pm}0.023$ & $0.306{\pm}0.077$ \\
+Retrain (oracle) & $94.5{\pm}0.9$ & 0.0 & $0.113{\pm}0.005$ & $0.468{\pm}0.115$ & 0.000 \\
+NegGrad & $91.9{\pm}1.5$ & $63.8{\pm}10.0$ & $\mathbf{0.249{\pm}0.002}$ & $0.839{\pm}0.046$ & $0.168{\pm}0.040$ \\
+FineTune & $98.0{\pm}0.3$ & $28.5{\pm}3.9$ & $0.212{\pm}0.008$ & $0.668{\pm}0.053$ & $0.029{\pm}0.004$ \\
+KED & $97.3{\pm}0.3$ & $1.2{\pm}0.4$ & $0.134{\pm}0.009$ & $0.459{\pm}0.035$ & $0.003{\pm}0.001$ \\
+BadTeacher & $97.7{\pm}0.3$ & $13.2{\pm}5.9$ & $0.161{\pm}0.015$ & $0.367{\pm}0.058$ & $0.011{\pm}0.006$ \\
+SISA & $70.4{\pm}0.1$ & 0.0 & $0.073{\pm}0.004$ & $0.077{\pm}0.007$ & $0.002{\pm}0.000$ \\
+\bottomrule
+\end{tabular}
+\par\vspace{2pt}\footnotesize 三个种子的均值 $\pm$ 标准差。MIA-loss 是损失阈值 AUC；Retrain 的 $0.000$ 是预期的（oracle 从未在遗忘类上训练，产生完美反向排序；见第~\ref{sec:benchmark}~节）。表示 MMD 与残差探针 AUC 在正文中报告（第~\ref{sec:benchmark}~节）。
+\end{table}
+
+即使是重训练 oracle（数学上完美的遗忘）也有非零 RII，$\rho{=}0.113{\pm}0.005$：因为 cat 现在是\emph{未见}类，其输出分布不同于保留类，所以标准 RII 无法在类级遗忘下证明 oracle 完美。这种已知/未知不对称正是 MHPR 所处理的，它将与 NoUnlearn 的差距缩小到（$0.468$ 对比 $0.802$）。
+
+梯度上升（NegGrad）是\emph{唯一} RII 随遗忘\emph{上升}的方法（$0.249{\pm}0.002$ 对比 NoUnlearn 的 $0.190{\pm}0.036$，表~\ref{tab:benchmark}），尽管遗忘准确率与 MIA-loss 都改善了。上升将遗忘类推向自信、系统性错误的预测，集中输出签名并使通道\emph{更加}可区分；在我们报告的指标中，RII 是唯一暴露此失败的，因为准确率与 MIA-loss 都改善。结合微调反弹（第~\ref{sec:rebound}~节），输出空间擦除在基于梯度的遗忘强度上不是单调的。
+
+\begin{table}[t]
+\centering
+\small
+\caption{七种遗忘方法间评估指标的 Pearson 相关（CIFAR-10；每个方法是三个种子的均值，七个方法级数据点仅供参考）。}
+\label{tab:corr}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l c c c c c c}
+\toprule
+ & RII & MHPR & For. & MIA & MMD & probe \\
+\midrule
+RII & 1.00 & & & & & \\
+MHPR & 0.90 & 1.00 & & & & \\
+For. & 0.75 & 0.83 & 1.00 & & & \\
+MIA & 0.57 & 0.73 & 0.96 & 1.00 & & \\
+MMD & 0.77 & 0.69 & 0.58 & 0.47 & 1.00 & \\
+probe & 0.80 & 0.75 & 0.48 & 0.35 & 0.95 & 1.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+RII 与 MHPR 强一致（$r{=}0.90$）并跟踪遗忘准确率（$r{=}0.75$ 与 $0.83$）；RII--遗忘准确率相关由 Retrain 端点（遗忘准确率 $0\%$）驱动，且在非 oracle 方法中这两个指标系统性地分歧：NegGrad 的遗忘准确率\emph{下降}（从 $85.2\%$ 到 $63.8\%$）而 RII\emph{上升}（从 $0.190$ 到 $0.249$），这是准确率代理会错过的失败。RII 与 MIA-loss 呈中等相关（$r{=}0.57$），并在顶端分歧（NegGrad 在 RII 下最差、在 MIA-loss 下第二差），支持正交轴观点（第~\ref{sec:mia}~节）。表示 MMD 与 RII 相关 $r{=}0.77$；完整矩阵见表~\ref{tab:corr}。
+
+分离遗忘类与留出特征的残差线性探针在\emph{所有}方法上都成功（$\mathrm{AUC}\approx0.94$--$0.98$），包括 oracle（$0.956$）：输出级擦除与表示级签名共存，与~\cite{cosma2026ruler,yong2026erased} 一致，并促使两层审计（第~\ref{sec:mia}~节）。
+
+解读这些结果时应注意几点。(1) SISA 的低保留准确率（$70.4\%$）源于轻量训练预算（$5$ 分片 $\times$ $2$ 切片），因此其近零谱得分是效用伪影，我们将其排除出排序结论：退化的模型可能把 RII 推向零（如第~\ref{sec:llm}~节与第~\ref{sec:benchmark}~节中的崩溃），所以低 RII 必须始终与保留准确率一起解读。(2) CIFAR-10 上 MHPR 绝对值高于 MNIST，因为 $\{7,8,9\}$ 与 cat 语义上不近；当留出参照有代表性时 MHPR 最具判别力。(3) MIA-loss AUC 低于 $0.5$，因为 cat 比保留类更难（遗忘/保留准确率 $85.2\%$ 对比 $92.6\%$），因此损失阈值沿``错误''方向分离它们；相对排序是有意义的。Retrain oracle 的极端值 $0.000$ 是预期的而非异常：因为 oracle 从未在 cat 上训练，其 cat 损失超过每个保留样本，所以基于损失的 MIA 将每个遗忘样本判给非成员类，即完美反向排序（AUC${\to}0$），这本身就是成功擦除的分布级证据。(4) 以下类级基准基于三个种子，以均值 $\pm$ 标准差报告；它们支持指标的稳定性与定性排序，但在 $n{=}3$ 下并不单独确立相近对（例如 RII 下 NegGrad 与 NoUnlearn）的统计显著性。RII 的种子稳定性还由随机基线（10 种子，SD$<3.5{\times}10^{-4}$）与 7B 研究（3 次子采样，相对 $<$3\%）交叉佐证。
+
+表~\ref{tab:cross} 用 MLP 在 Fashion-MNIST 上重复该协议。RII 仍可判别：NegGrad 失败持续（$\rho{=}0.169{\pm}0.004$ 对比 $0.166{\pm}0.004$），oracle 保持非零 RII（$0.089{\pm}0.012$），KED 取得最低 RII（$0.063{\pm}0.006$）。与早前分析的单次基线不同，MHPR 在全部三个种子上不加温度缩放即可判别：oracle（$0.429{\pm}0.137$）排在 NoUnlearn（$0.749{\pm}0.244$）\emph{之下}，而在单次较早运行中观察到的低精度子空间坍缩（第~\ref{sec:mhpr}~节）是种子依赖的而非系统性的；温度缩放仍是一般情形下低精度模型的推荐保障。表示探针再次在 $\mathrm{AUC}{=}1$ 附近饱和。
+
+\begin{table}[t]
+\centering
+\small
+\caption{相同协议下的跨数据集基准：CIFAR-10（SmallCNN）与 Fashion-MNIST（MLP）上的 RII/MHPR/MIA；三个种子的均值 $\pm$ 标准差。}\label{tab:cross}
+\setlength{\tabcolsep}{2pt}
+\footnotesize
+\begin{tabular}{l c c c | c c c}
+\toprule
+ & \multicolumn{3}{c|}{CIFAR-10} & \multicolumn{3}{c}{Fashion-MNIST} \\
+方法 & $\rho$ & MHPR & MIA & $\rho$ & MHPR & MIA \\
+\midrule
+NoUnlearn & $0.190{\pm}0.036$ & $0.802{\pm}0.023$ & $0.306{\pm}0.077$ & $0.166{\pm}0.004$ & $0.749{\pm}0.244$ & $0.493{\pm}0.046$ \\
+Retrain (oracle) & $0.113{\pm}0.005$ & $0.468{\pm}0.115$ & 0.000 & $0.089{\pm}0.012$ & $0.429{\pm}0.137$ & 0.000 \\
+NegGrad & $\mathbf{0.249{\pm}0.002}$ & $0.839{\pm}0.046$ & $0.168{\pm}0.040$ & $0.169{\pm}0.004$ & $0.787{\pm}0.197$ & $0.474{\pm}0.049$ \\
+FineTune & $0.212{\pm}0.008$ & $0.668{\pm}0.053$ & $0.029{\pm}0.004$ & $0.245{\pm}0.028$ & $0.697{\pm}0.106$ & $0.115{\pm}0.029$ \\
+KED & $0.134{\pm}0.009$ & $0.459{\pm}0.035$ & $0.003{\pm}0.001$ & $\mathbf{0.063{\pm}0.006}$ & $0.213{\pm}0.062$ & $0.008{\pm}0.002$ \\
+BadTeacher & $0.161{\pm}0.015$ & $0.367{\pm}0.058$ & $0.011{\pm}0.006$ & $0.129{\pm}0.010$ & $0.169{\pm}0.096$ & $0.008{\pm}0.003$ \\
+SISA & $0.073{\pm}0.004$ & $0.077{\pm}0.007$ & $0.002{\pm}0.000$ & $0.096{\pm}0.008$ & $0.592{\pm}0.064$ & $0.003{\pm}0.001$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+表~\ref{tab:cifar100} 用 20 个训练类重复该协议（遗忘类~3，留出 $\{20,21,22\}$）。NegGrad 隐藏失败在更大规模下\emph{更显著}：其 RII（$0.189{\pm}0.016$）甚至超过 NoUnlearn（$0.127{\pm}0.026$，$1.49\times$ 差距，对比 CIFAR-10 的 $1.31\times$），而遗忘准确率与 MIA-loss 再次改善：被梯度上升增强的输出签名在更大的输出空间中更尖锐。已知/未知不对称持续（oracle $\rho{=}0.131{\pm}0.002$）。然而，MHPR 在此规模不再分离 oracle（$0.187{\pm}0.157$）与 NoUnlearn（$0.152{\pm}0.096$）——其方差随类数增大——因此谱 RII 分离在此是更稳健的信号。报告六种方法；SISA 因 20 类的分片训练在此规模不成比例而省略。
+
+\begin{table}[t]
+\centering
+\small
+\caption{CIFAR-100 上的类级遗忘基准（20 个训练类，遗忘类~3，$K{=}3$ 留出 $\{20,21,22\}$）；三个种子的均值 $\pm$ 标准差。}\label{tab:cifar100}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c c c}
+\toprule
+方法 & Ret.(\%) & For.(\%) & $\rho$ & MHPR & MIA-loss \\
+\midrule
+NoUnlearn & $86.6{\pm}2.0$ & $74.3{\pm}13.1$ & $0.127{\pm}0.026$ & $0.152{\pm}0.096$ & $0.276{\pm}0.093$ \\
+Retrain (oracle) & $85.3{\pm}2.0$ & 0.0 & $0.131{\pm}0.002$ & $0.187{\pm}0.157$ & 0.000 \\
+NegGrad & $81.9{\pm}2.7$ & $21.7{\pm}4.1$ & $\mathbf{0.189{\pm}0.016}$ & $0.306{\pm}0.041$ & $0.096{\pm}0.019$ \\
+FineTune & $92.5{\pm}0.4$ & $39.5{\pm}5.8$ & $0.178{\pm}0.004$ & $0.235{\pm}0.055$ & $0.077{\pm}0.015$ \\
+KED & $93.1{\pm}0.5$ & $39.9{\pm}5.9$ & $0.174{\pm}0.005$ & $0.278{\pm}0.045$ & $0.068{\pm}0.015$ \\
+BadTeacher & $93.1{\pm}0.6$ & $33.6{\pm}9.2$ & $0.160{\pm}0.003$ & $0.204{\pm}0.012$ & $0.063{\pm}0.020$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+上述基准是视觉的。为检验跨模态迁移，我们在文本上重复该协议。在 AG News（四类，遗忘集 $=$ World 新闻）上，微调两轮 epoch 的 DistilBERT 分类器~\cite{sanh2020distilbert} 显示与视觉相同的排序：RII 将未触动模型（$\rho{=}0.267$）与重训练 oracle（$\rho{=}0.090$）区分开，$2.96{\times}$ 差距与 CIFAR-10 结果一致。这些文本结果是单次运行的 pilot 观察，作为迁移证据而非完整的跨模态基准报告，因为我们未在多个种子上重复。梯度上升在此行为不同：它彻底摧毁模型（保留准确率降到 $37.5\%$，$\rho{\approx}0$），是显性而非隐藏失败。因此低 RII 是擦除的必要而非充分证据：必须与保留准确率一起解读，才能区分真移除与模型崩溃，这与第~\ref{sec:mia}~节的两轴观点一致。同样的情况出现在小语言模型（Qwen2.5-0.5B~\cite{qwen2024qwen2}）的作者级 TOFU~\cite{maini2024tofu} 协议下：暴露后在保留集上微调使遗忘答案保持不变（准确率不变），在仅解码器模型中复现第~\ref{sec:rebound}~节的反弹，而梯度上升再次摧毁模型（$\rho{\to}0$，损失增长一个数量级）。这个小模型 pilot 也暴露出一个真实的边界：在 0.5B 规模下，词表级输出通道无法将 oracle 与未触动模型区分开（$\rho{=}0.080$ 对比 $0.083$），因为两个答案集诱导出统计上相似的文本分布。第~\ref{sec:llm}~节表明在 7B 规模下相同词表通道变得可判别：证书的判别力在于输出通道的\emph{类语义}，而模型容量决定原始词表通道是否足够（参见注记~\ref{rem:channel}）；语言模型审计应优先使用类级通道（例如作者分类头）。
+
+\subsection{动态范围与梯度扫描}
+
+\begin{table}[t]
+\centering
+\small
+\caption{RII 动态范围（CIFAR-10，cat 类）。}\label{tab:dynamic_range}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c}
+\toprule
+场景 & $\rho$ & $\sigma_2/\sigma_1$ \\
+\midrule
+随机 5\%（NoUnlearn） & $1.20\times10^{-3}$ & 0.035 \\
+cat 类（基线）   & $\mathbf{1.83\times10^{-1}}$ & 0.47 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+表~\ref{tab:dynamic_range} 显示类遗忘的 $\rho$ 比随机遗忘\textbf{大 152$\times$}，表明 RII 并不退化。RII 在第一步的短暂上升之后随梯度上升步数下降（表~\ref{tab:gradient_sweep}），与式~\eqref{eq:finetune_bound}（定理~\ref{thm:finetune}）的 $O(\lambda^2)$ 界一致，其中 $\lambda$ 为上升步长。这些受控扫描（表~\ref{tab:dynamic_range}、表~\ref{tab:gradient_sweep}，以及表~\ref{tab:rebound} 的反弹研究）使用与第~\ref{sec:benchmark}~节主基准分开训练的基线，因此 NoUnlearn 参照值在此不同（$\rho{=}0.183$ 对比表~\ref{tab:benchmark} 的 $0.190{\pm}0.036$）；我们在这些研究中比较的是表内相对模式。
+
+\begin{table}[t]
+\centering
+\small
+\caption{RII 随梯度上升步数的变化（CIFAR-10，cat 类）。}\label{tab:gradient_sweep}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{c c c c}
+\toprule
+步数 & $\rho$ & Acc.(\%) & $\sigma_2/\sigma_1$ \\
+\midrule
+0 & $1.83\times10^{-1}$ & 76.2 & 0.47 \\
+1 & $1.95\times10^{-1}$ & 71.9 & 0.48 \\
+3 & $1.76\times10^{-1}$ & 71.2 & 0.46 \\
+10 & $1.05\times10^{-1}$ & 69.2 & 0.34 \\
+30 & $1.25\times10^{-2}$ & 58.4 & 0.11 \\
+100 & $2.04\times10^{-3}$ & 25.4 & 0.05 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{MHPR 评估}
+
+\begin{table}[t]
+\centering
+\small
+\caption{MHPR 对比 LOCO（MNIST 类遗忘，在 8 类上训练，遗忘类~5）。}\label{tab:mhpr}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{c c c c}
+\toprule
+$K$ & $\rho_{\mathrm{std}}$ & $\rho_{\mathrm{LOCO}}$ & $\rho_H$ \\
+\midrule
+1 & 0.145 & 0.379 & 0.942 \\
+2 & 0.141 & 0.348 & 0.789 \\
+\textbf{3} & 0.136 & 0.310 & \textbf{0.046} \\
+4 & 0.142 & 0.167 & \textbf{0.0008} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+表~\ref{tab:mhpr} 比较 MHPR 与 LOCO。MHPR 将遗忘类均值投影到 $K$ 个留出未见类的张成子空间上（第~\ref{sec:mhpr}~节）；在 MNIST 类遗忘上，$K\ge3$ 解决 LOCO 失败：$K{=}1$ 给出 $\rho_H{=}0.942$（比 LOCO 更差，因为单个参照错失未见类流形），而 $K{=}3$ 将 $\rho_H$ 降到 $0.046$，比 $\rho_{\mathrm{std}}{=}0.136$ 与 $\rho_{\mathrm{LOCO}}{=}0.310$ 低一个数量级。$K{=}4$ 达到 $0.0008$（近机器零）但消耗训练数据（准确率 $79.5\%{\to}48.7\%$）。我们推荐 $K{=}3$。图~\ref{fig:k_ablation} 以图形方式展示相同趋势。
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.78\textwidth]{../ai_submission/figures/k_ablation.pdf}
+\caption{MHPR 随留出类数量 $K$ 的变化（MNIST 类遗忘，遗忘类~5，对数刻度）。$\rho_H$ 在 $K{=}3$ 时下降两个数量级，$K{=}4$ 时接近机器零，而标准与 LOCO RII 基线保持在 $0.14$ 与 $0.31$ 附近（表~\ref{tab:mhpr}）。}\label{fig:k_ablation}
+\end{figure}
+
+跨数据集的自适应温度缩放将 MHPR 扩展到留出子空间可能坍缩的低精度区间（Fashion-MNIST 上一种种子依赖的失败，第~\ref{sec:benchmark}~节）。在 Fashion-MNIST（$88.7\%$ 准确率）的坍缩运行上，$T{=}50$ 将 $\rho_H$ 从 $\sim1$ 降到 $0.021$；在 CIFAR-10（$75\%$）上，$T{=}5$ 给出 $\rho_H{=}0.025$。这些优于类级 RII 基线（Fashion-MNIST 与 CIFAR-10 分别为 $0.166{\pm}0.004$ 与 $0.190{\pm}0.036$，见表~\ref{tab:cross}）。
+
+\paragraph{理想遗忘构造。}为进一步验证 MHPR，我们构造一个\emph{精确}位于 $K{=}5$ 个留出 Fashion-MNIST 类均值张成子空间内的合成遗忘均值 $\boldsymbol{\mu}_f$。所得 $\rho_H$ 为机器零（$<10^{-10}$）。注入各向同性噪声 $\boldsymbol{\varepsilon}\sim\mathcal{N}(0,\varepsilon^2\mathbf{I})$ 使 $\rho_H$ 单调上升：$\varepsilon{=}0.01$ 给出 $\rho_H{=}0.005$，$\varepsilon{=}0.10$ 给出 $\rho_H{=}0.237$。这证实 $\rho_H{=}0$ 当且仅当 $\boldsymbol{\mu}_f$ 位于留出子空间内，直接验证命题~\ref{prop:mhpr_monotone}。
+
+\subsection{微调反弹与敏感性}
+\label{sec:rebound}
+
+第~\ref{sec:benchmark}~节将梯度上升排为最弱的类级遗忘方法。一个实际问题：在实践常用的"先上升后微调"配方下，该排序是否仍然成立。
+
+\paragraph{微调反弹。}当在 $D_f$ 上的梯度上升之后接着在 $D_r$ 上微调时，$\rho$ 从 $0.105$（仅上升）升到 $0.221$（上升 $+$ 微调），甚至超过基线 $0.183$（表~\ref{tab:rebound}）。定理~\ref{thm:unified} 解释这一点：上升降低覆盖泄漏 $\eta^2$，但微调重塑决策边界并使遗忘表示重新错位，抬升 $\sigma_2$——这是基于准确率的指标会错过的失败。
+
+\begin{table}[t]
+\centering
+\small
+\caption{微调反弹现象（CIFAR-10，cat 类）。}\label{tab:rebound}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l c c c}
+\toprule
+操作 & $\rho$ & Acc.(\%) & $\sigma_2/\sigma_1$ \\
+\midrule
+基线（不遗忘） & 0.183 & 76.2 & 0.47 \\
+上升 10 步 & 0.105 & 69.2 & 0.34 \\
+上升 10 + 微调 & \textbf{0.221} & 75.2 & 0.52 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{跨数据集与敏感性。}对 $C{=}10$--$100$（MNIST、CIFAR-10/100），$\rho\le2\times10^{-3}$，证实秩一性质是结构性的。在刻意过拟合下（表~\ref{tab:sensitivity}，第~\ref{app:extra}~节），$\rho$ 飙升 $10\times$（MNIST 60K$\to$5K，50 epoch：$9.8\times10^{-4}\to1.24\times10^{-2}$）。受控 $\alpha$-扰动证实正交轴：$\alpha{=}0.20$ 使 RII 提高 $9\times$ 而 MIA 仅上升 $6.8$ 个百分点。CIFAR-100 上的 ResNet-18 保持 $\rho{=}1.41\times10^{-3}$（表~\ref{tab:resnet18}），证实架构独立性。
+
+\paragraph{逐样本 MHPR 差距。}命题~\ref{prop:ps_mhpr} 预测 $\bar{\rho}_H \ge \|\boldsymbol{\pi}_f\|_2^2\,\rho_{H,\mathcal{S}}$（Jensen 差距）。在我们的 MNIST 实验中，基线时 $\rho_{H,\mathcal{S}}{\approx}0.99999$ 且 $\bar{\rho}_H{\approx}0.99932$，差距约 $0.00066$，在 100 个梯度步后缩小到 $0.00023$；在更多异质数据上预期差距更大，使逐样本 MHPR 更保守。
+
+\subsection{大规模验证与敏感性}
+\label{app:extra}
+
+\begin{table}[t]
+\centering
+\small
+\caption{CIFAR-100 上的 ResNet-18。}\label{tab:resnet18}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l c c c c}
+\toprule
+模型 & $|D_f|$ & Acc.(\%) & $\rho$ & $\sigma_2/\sigma_1$ \\
+\midrule
+SmallCNN & 2,500 & 20.8 & $7.10{\times}10^{-4}$ & 0.027 \\
+ResNet-18 & 2,500 & 29.7 & $1.41{\times}10^{-3}$ & 0.038 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\caption{RII 对过拟合的敏感性。}\label{tab:sensitivity}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{l l c c c c}
+\toprule
+数据集 & 模型 & $|D|$ & Ep. & Acc.(\%) & $\rho$ \\
+\midrule
+MNIST   & SimpleMLP & 60K & 10  & 97.45 & $9.8{\times}10^{-4}$ \\
+MNIST   & DeepMLP & 5K & 50 & 95.50 & $\mathbf{1.24{\times}10^{-2}}$ \\
+CIFAR-10 & SmallCNN & 50K & 10  & 76.34 & $1.5{\times}10^{-3}$ \\
+CIFAR-10 & SmallCNN & 5K & 50 & 61.63 & $\mathbf{1.31{\times}10^{-2}}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+在刻意过拟合下（表~\ref{tab:sensitivity}），$\rho$ 飙升 $10\times$，证实对记忆化的敏感性。在 10 次独立 MNIST 训练运行（5\% 随机遗忘）中，$\rho$ 均值 $9.72{\times}10^{-4}$、标准差 $2.1{\times}10^{-5}$（CV $2.2\%$），MIA 均值 $90.4\%$、标准差 $0.3\%$；两者都稳定但正交，如定理~\ref{thm:unified} 所预测。
+
+\subsection{与现有指标的对比}
+
+\begin{table}[t]
+\centering
+\caption{遗忘评估指标对比。}\label{tab:metric_compare}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l c c c}
+\toprule
+指标 & 信息论 & 免调参 & 复杂度 \\
+\midrule
+MIA~\cite{shokri2017membership} & 否 & 否 & 中 \\
+DP~\cite{guo2020certified} & 是 & 否 & 高 \\
+Backdoor~\cite{sommer2022towards} & 否 & 否 & 高 \\
+表示级~\cite{cosma2026ruler} & 否 & 否 & 高 \\
+审计~\cite{ye2026auditing} & 否 & 否 & 高 \\
+\textbf{RII} & \textbf{是} & \textbf{是} & $O(CN)$ \\
+\textbf{MHPR} & \textbf{是} & \textbf{是} & $O(KCN)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+表~\ref{tab:metric_compare} 将 RII 与 MHPR 和现有指标对比。RII 是表中唯一同时满足谱奠基、免超参计算与 $O(CN)$ 复杂度的条目。

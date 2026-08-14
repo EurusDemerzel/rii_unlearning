@@ -1,0 +1,78 @@
+% =============================================================================
+% zh_part3.tex — §6–§9（逐句对照中文版）
+% =============================================================================
+
+% =============================================================================
+\section{调和 MIA 与 RII：两个正交泄漏轴}
+\label{sec:mia}
+
+在随机遗忘基线中（表~\ref{tab:main}），训练/测试成员推断准确率保持在约 90\%，而 $\rho \approx 10^{-3}$。这两者并不矛盾：此处的 MIA 度量一般训练成员性——训练样本与测试样本之间的置信度差距——而 RII 度量遗忘与保留输出是否可区分。对随机遗忘子集，模型并未改变，因此遗忘与保留输出仍不可区分（$\rho\approx10^{-3}$），尽管训练/测试成员信号与任何已训练模型一样强（90\%）。定理~\ref{thm:unified} 将这两者形式化为两条正交的泄漏轴。
+
+\begin{itemize}
+\item \textbf{分布位移（MIA 轴，$I_{\mathrm{dir}}$）：}任何训练样本往往比测试样本有更高置信度。MIA 利用这一差距，区分 $P(\ell\mid\text{train})$ 与 $P(\ell\mid\text{test})$。
+\item \textbf{样本特定泄漏（RII 轴，$I_{\mathrm{cov}}$）：}RII 度量 $P(Y\mid D_f,\theta') \neq P(Y\mid D_r,\theta')$ 是否成立，即 $D_f$ 是否留下不同的输出签名。
+\end{itemize}
+
+Retrain 与 NoUnlearn 可表现出几乎相同的 RII，同时两者 MIA 准确率都高，因为 MIA 检测的是训练成员性的一般性，而非某个具体遗忘请求是否被履行。\textbf{RII 证明输出级遗忘/保留不可区分性}——这正是擦除合规的相关保证。
+
+\begin{table}[t]
+\centering
+\caption{展示正交泄漏轴的受控扰动实验（MNIST，5\% 遗忘）。}\label{tab:alpha}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{c c c c}
+\toprule
+$\alpha$ & $\rho$ (RII) & MIA (\%) & 解释 \\
+\midrule
+0.00 & $9.76{\times}10^{-4}$ & 90.4 & 基线 \\
+0.20 & $8.91{\times}10^{-3}$ & 97.2 & 强直接泄漏 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+表~\ref{tab:alpha} 证实定理~\ref{thm:unified} 预测的不对称响应：随着 $\alpha$ 增加，RII 上升 $9\times$ 而 MIA 增加 6.8 个百分点。这种不对称直接反映泄漏的独立轴。相同正交性出现在真实遗忘方法下（第~\ref{sec:benchmark}~节）：RII 与 MIA-loss 相关 $r{=}0.57$（中等，基于七个方法级均值），且顶端排序反转：NegGrad 在 RII 下最差、在 MIA-loss 下第二差。
+
+\paragraph{超越输出。}
+输出层保证对白盒安全是必要而非充分的。利用链式法则 $I(D_f;Y,\theta') = I(D_f;\theta') + I(D_f;Y\mid\theta')$，总泄漏分解为 $I(D_f;\theta') = I(D_f;Y) + I(D_f;\theta'\mid Y) - I(D_f;Y\mid\theta')$。RII 证明条件项 $I(D_f;Y\mid\theta')$（给定模型的输出泄漏）。项 $I(D_f;\theta'\mid Y)$（输出之外的内部表示中的信息）可以通过审计内部特征（例如倒数第二层激活上的 MMD）来界定。两者共同构成完整的两层证书；完整刻画留待未来工作。经验上（第~\ref{sec:benchmark}~节），倒数第二层特征上的残差探针甚至对重训练 oracle 也能以 AUC ${\approx}0.96$ 分离遗忘与留出样本，证实输出级证书必须与表示级审计配对。
+
+\paragraph{与现有指标对比。}
+在所比较的指标中，RII 与 MHPR 是唯一同时满足谱奠基、免超参计算与尺度不变性的。与 MIA（混淆训练/测试位移与遗忘/保留泄漏，$O(CN)$ 但依赖调参）、DP 认证（侵入式训练）、或基于后门的审计（依赖攻击）不同，RII 直接量化被删数据的影响是否已从模型的输出分布中移除（表~\ref{tab:metric_compare}）。
+
+% =============================================================================
+\section{相关工作}
+\label{sec:related}
+
+\textbf{机器学习遗忘。}该领域涵盖精确重训练~\cite{cao2015towards}、SISA~\cite{bourtoule2021machine}、基于梯度的反转~\cite{golatkar2020eternal}、基于删除的方法~\cite{ginart2019making,sekhari2021remember}，以及影响函数~\cite{guo2020certified}。我们的贡献对任何具体算法都是正交的：一个度量输出空间不可逆性的算法无关\emph{评估指标}。
+
+\textbf{遗忘评估。}成员推理攻击~\cite{shokri2017membership,carlini2022membership} 是事实标准，但 MIA 检测训练成员性的一般性而非遗忘集特定的泄漏；差分隐私界~\cite{guo2020certified} 给出最坏情况保证但要求侵入式训练；后门审计依赖攻击。RII 则是一个免调参的输出级不可区分性谱证书。PSSD（附录~\ref{app:pssd}）共享这一哲学：$\delta(x)$ 得分是一个证书而非攻击——如果所有遗忘样本的 $\delta(x)$ 都低，那么任何基于阈值的 MIA 都无法将它们与保留样本分离（定理~\ref{thm:pssd_mia}），这是比经验攻击准确率更强的操作保证。
+
+\textbf{超越攻击的验证。}近期工作表明模型能通过输出级检查、同时在中间表示中保留残余签名~\cite{cosma2026ruler,yong2026erased}；表示级验证~\cite{cosma2026ruler} 与通用审计框架~\cite{ye2026auditing} 在不使用影子模型或重训练基线的情况下解决此问题，而~\cite{zhang2024fragile} 表明验证可被不诚实提供者绕过，~\cite{zheng2026bias} 分析类级遗忘中的分类头偏差；我们请读者参阅~\cite{xue2026verification} 获取分类体系。RII 是这些工作的补充：一个纯输出级、免调参的谱证书，不需要影子模型或训练时修改。
+
+\textbf{信息论安全。}我们的谱分析建立在 Shannon 的信道模型~\cite{shannon1949communication} 与现代信息论安全~\cite{bloch2021overview} 之上：Hilbert--Schmidt 分解给出我们 $2\times C$ 分析的连续类比，$\chi^2$-MI 界是标准的。奇异值衰减与残余输出泄漏之间的联系（定理~\ref{thm:unified}）将信息论隐私扩展到遗忘，其中``秘密''是遗忘集成员性而非固定属性。
+
+% =============================================================================
+\section{部署考量}
+\label{sec:deployment}
+
+RII 需要对 $D_f \cup D_r$ 做一次前向传播，花费 $O(C(N_f+N_r))$ 时间与 $O(C)$ 内存，相比模型训练可忽略。对大规模遗忘集，命题~\ref{prop:confidence} 提供子采样保证：从 $D_f$ 与 $D_r$ 各取
+\[
+N_{\min} \ge \frac{16C\nu^2}{\sigma_1^2\varepsilon^2}\log\frac{4C}{\delta}
+\]
+个样本，则估计满足 $|\hat{\rho}-\rho^*| \le \varepsilon$ 且置信度 $\ge 1-\delta$。取 $\sigma_1\approx0.4$、$\nu\approx1$、$C=10$，以绝对精度 $\varepsilon=10^{-2}$ 解析 $\rho$ 在最坏情况需 $N_{\min}\approx7\times10^7$；该界是保守的（对 $C$ 个坐标的 union bound 与均值常数），实际中每类约 $10^4$ 样本（如我们的 MNIST 规模审计）即可解析相关谱区间。MHPR 需要对留出类额外做 $K$ 次前向传播。
+
+\paragraph{推荐审计协议。}
+(1) 从 $D_f$ 与 $D_r$（以及 MHPR 的每个留出类）均匀抽取 $N_{\min}$ 个样本。(2) 计算 $\hat{\rho}$（或 $\hat{\rho}_H$），若模型准确率 $\lesssim 90\%$ 则应用温度缩放。(3) 报告 $[\hat{\rho}-\varepsilon,\;\hat{\rho}+\varepsilon]$ 作为水平 $1-\delta$ 的保守高概率区间。(4) 对两轴评估，报告 RII 旁的 MIA AUC，通过 $I(D_f;\theta') \lesssim I_{\mathrm{RII}} + I_{\mathrm{MIA}}$ 界定总泄漏。
+
+\paragraph{估计直接泄漏参数 $\alpha$。}
+统一分解将泄漏分为 $I_{\mathrm{cov}}\propto\eta^2$（由 RII 测量）与 $I_{\mathrm{dir}}\propto\alpha^2$。$\eta$ 可直接从通道矩阵计算，而 $\alpha$ 在黑盒审计中不可观测；MIA 相对随机猜测的优势提供一个下界，因为 $\mathrm{AUC}>0.5$ 蕴含 $\alpha>0$，且差距 $\mathrm{AUC}-0.5$ 随 $|\alpha|$ 单调缩放。因此两轴审计（RII 测覆盖泄漏，MIA AUC 测直接泄漏）通过 $I(D_f;\theta') \lesssim I_{\mathrm{RII}} + I_{\mathrm{MIA}}$ 界定总输出泄漏，无需直接观测 $\alpha$：RII 证明遗忘集的输出签名已被擦除，而 MIA AUC 界定黑盒攻击者可利用的残余分布位移。
+
+% =============================================================================
+\section{结论}
+\label{sec:conclusion}
+
+类级遗忘验证处于两种失败模式之间：基于准确率的指标在高遗忘强度下饱和并失去排序力，而 MIA 度量一个相关但不同的量——一般训练成员性——而非遗忘集特定的输出泄漏。RII 填补这一空白：它是一个免调参、黑盒的输出级不可区分性证书，恰好在准确率饱和时仍具信息量。经验上，它在大多数设置中跟踪已知遗忘强度并标记效用驱动的崩溃，并在 LLaMA-2-7B 的 TOFU 基准上在生成准确率饱和于 100\% 的检查点中保持该排序。在 MUSE 风格长文本书籍遗忘上（第~\ref{sec:muse}~节），梯度上升同样使遗忘输出分布保持不变，遗忘困惑度将重训练排序为最强擦除，而原始词表通道反映的是两本书的固有差异而非遗忘状态——这是强调通道语义作用的一个清晰边界情形。实验也划定了谱证书能做什么、不能做什么。RII 在梯度上升下\emph{上升}（即便准确率与 MIA 都改善，且随类数增加而增强），在上升-后-微调后反弹，并在模型退化时趋于零，因此必须始终与效用指标一起解读。在理论侧，$\rho=0$ 等价于输出通道独立，微调界为 $O(\lambda^2)$，统一分解将泄漏分为直接（MIA）与覆盖（RII）两轴。MHPR 扩展及其温度缩放处理已知/未知类不对称，PSSD（附录~\ref{app:pssd}）将审计扩展到逐样本状态差异。
+
+\textbf{局限性。}该证书按构造是输出级的：它不界定内部表示中的泄漏（探针实验表明即使对重训练 oracle 这种泄漏也可能存在），也不证明参数级隐私。类级基准基于三个种子（以均值 $\pm$ 标准差报告），它们支持指标的稳定性与定性排序，但在 $n{=}3$ 下并不单独确立相近对的统计显著性。随机基线（10 种子）与 7B 研究（3 次子采样）上的种子稳定性进一步佐证指标的稳定性。AG News、0.5B 与 MUSE 风格书籍结果是单次运行的 pilot 观察，作为迁移证据而非完整基准报告（书籍研究还受基座模型对公有领域文本的先前暴露限制，这压缩了 teacher 的可学习余量）。MI 界要求 $\pi_{\min}>0$，统一分解在高斯信号模型下精确成立、一般情形一阶成立。
+
+\textbf{实用指南。}审计中不应单独用 RII 来宣布遗忘成功。由于该证书是输出级的，且既可能因模型退化也可能因擦除而趋于零，我们建议同时报告：(i) 效用检查（保留准确率，以及可行时的遗忘准确率），以区分真擦除与崩溃；(ii) 一个 MIA 得分（遗忘/保留损失 AUC，或适当的训练/测试成员准确率），用于直接泄漏轴；(iii) 内部表示探针（倒数第二层特征上的 MMD 或残差线性探针），以捕捉表示级签名；(iv) 在留出参照类可用时使用 MHPR。第~\ref{sec:mia}~节形式化的正是这种两层、两轴审计。
+
+\textbf{未来工作。}方向包括正式的 DP--RII 联系；将作者级 TOFU 研究扩展到完整基准套件（遗忘 90/95/99、Truth Ratio 与 KLR~\cite{maini2024tofu}），并将 MUSE 风格书籍研究（第~\ref{sec:muse}~节）扩展到完整 MUSE~\cite{shi2024muse} 套件（版权书籍、新闻）；语言模型的类级输出通道（例如作者或书籍分类头）；PSSD 的多层状态轨迹扩展（附录~\ref{app:pssd}）；将 RII 与内部表示审计结合以实现完全白盒认证；ImageNet 规模验证；以及在缺乏语义匹配的留出类时，用合成或生成式参考分布构造 MHPR 参考子空间。
