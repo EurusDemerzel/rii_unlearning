@@ -58,7 +58,7 @@ Specifically, we address the research question: \emph{can a lightweight, black-b
 
 We introduce a lightweight, black-box certificate based on a \textbf{spectral condition}: output-space irreversibility reduces to the rank of a $2\times C$ empirical output channel matrix. By \textbf{output distributional irreversibility}, we mean that the forget-set membership indicator $X$ and the model's categorical output $Y$ are conditionally independent given the parameters $\theta'$, i.e., $I(X;Y\mid\theta')=0$. When this holds, the model's output distributions on $D_f$ and $D_r$ are statistically indistinguishable, yielding a rank-one output channel matrix and $\rho=0$.
 
-\textbf{Scope.} Our framework measures irreversibility strictly in the \emph{output space} (the observable predictions), matching black-box GDPR compliance auditing. Parameter-level white-box security is not asserted. We focus on \textbf{class-level forgetting}, the most stringent and practically relevant regime, where $D_f$ comprises an entire semantic class; MHPR (Sec.~\ref{sec:mhpr}) specifically addresses the known/unknown class asymmetry that arises there.
+\textbf{Scope.} Our framework measures irreversibility strictly in the \emph{output space} (the observable predictions), matching black-box GDPR compliance auditing. Parameter-level white-box security is not asserted. We focus on \textbf{class-level forgetting}, a stringent and practically relevant regime, where $D_f$ comprises an entire semantic class; MHPR (Sec.~\ref{sec:mhpr}) specifically addresses the known/unknown class asymmetry that arises there.
 
 The framework rests on a simple observation. The $2\times C$ \textbf{empirical output channel matrix} $\mathbf{M}(\theta')$ has rows $\boldsymbol{\mu}_f$ and $\boldsymbol{\mu}_r$ (mean softmax vectors on $D_f$ and $D_r$). Its singular values $\sigma_1 \ge \sigma_2$ encode residual dependence: $\sigma_2 = 0 \iff \mathrm{rank}(\mathbf{M}) = 1 \iff$ perfect removal.
 
@@ -128,7 +128,7 @@ The rows $\boldsymbol{\mu}_f, \boldsymbol{\mu}_r$ are empirical Monte Carlo aver
 \label{sec:class_baselines}
 %=============================================================================
 
-In class-level forgetting, the forget and retain rows average over fundamentally different distributions: $\boldsymbol{\mu}_f$ comes from a class the model never saw during training. Even under perfect unlearning, the rows can therefore differ, inflating standard RII.
+In class-level forgetting, the forget and retain rows average over structurally different distributions: $\boldsymbol{\mu}_f$ comes from a class the model never saw during training. Even under perfect unlearning, the rows can therefore differ, inflating standard RII.
 
 \subsection{The Leave-One-Class-Out (LOCO) Failure}
 
@@ -182,7 +182,7 @@ Empirical validation (Appendix~\ref{app:chi2}) confirms the bound of Eq.~\eqref{
 \subsection{Assumptions and Practical Validity}
 \label{sec:assumptions}
 
-Table~\ref{tab:assumptions} lists the assumptions behind each theoretical result and their status in the experimental settings of this paper; we then discuss the assumptions that a reviewer might question.
+Table~\ref{tab:assumptions} lists the assumptions behind each theoretical result and their status in the experimental settings of this paper; we then examine the most consequential of these assumptions.
 
 \begin{table}[t]
 \centering
@@ -368,7 +368,7 @@ Fashion-MNIST & NoUnlearn & 88.7 & $2.83\times10^{-4}$ & 90.4 \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:main} reveals four key findings. First, $\rho<5\times10^{-3}$ uniformly: standard neural network training induces near-rank-one output channels. Second, $\rho$ is accuracy-independent: CIFAR-100 at 20\% accuracy yields \emph{lower} $\rho$ than MNIST at 97.5\%, confirming the rank-one property is intrinsic to the softmax output simplex. Third, different unlearning methods yield nearly identical $\rho$ (we verified Retrain, SISA, and FineTune on MNIST), as expected: for random subsets, the model's generalization makes outputs indistinguishable even without explicit unlearning. Fourth, across 10 random seeds, $\rho$ has standard deviation $<3.5\times10^{-4}$, enabling reliable single-run auditing. Under random forgetting RII is therefore near-trivial (all methods are indistinguishable), whereas class-level forgetting is precisely the regime in which RII and MHPR become discriminative (Sections~\ref{sec:mhpr} and \ref{sec:benchmark}).
+Table~\ref{tab:main} reveals four key findings. First, $\rho<5\times10^{-3}$ uniformly: standard neural network training induces near-rank-one output channels. Second, $\rho$ is accuracy-independent: CIFAR-100 at 20\% accuracy yields \emph{lower} $\rho$ than MNIST at 97.5\%, confirming the rank-one property is intrinsic to the softmax output simplex. Third, different unlearning methods yield nearly identical $\rho$ (we verified Retrain, SISA, and FineTune on MNIST), as expected: for random subsets, the model's generalization makes outputs indistinguishable even without explicit unlearning. Fourth, across 10 random seeds, $\rho$ has standard deviation $<3.5\times10^{-4}$, enabling reliable single-run auditing. Under random forgetting RII is therefore near-trivial (all methods are indistinguishable), whereas class-level forgetting is the regime in which RII and MHPR become discriminative (Sections~\ref{sec:mhpr} and \ref{sec:benchmark}).
 
 \subsection{RII on a 7B-Parameter Language Model (TOFU)}
 \label{sec:llm}
@@ -393,7 +393,7 @@ Retrain (oracle) & 80.0 & 65.0 & $\mathbf{8.01{\times}10^{-2}}$ & 2.163 \\
 \par\vspace{2pt}\footnotesize MIA is the mean next-token NLL of the forget set, \emph{not} an AUC; higher values indicate stronger forgetting.
 \end{table}
 
-All three unlearned checkpoints (and the untouched model) answer the forget questions perfectly (Forget$=$100\%; many TOFU answers are recoverable from the question itself), so generation accuracy cannot separate them. RII, by contrast, ranks FineTune below NoUnlearn ($9.73{\times}10^{-2}$ vs.\ $1.16{\times}10^{-1}$, $-16\%$), the same ordering as the vision benchmarks, and separates the (lightweight, 60-step) retraining oracle ($8.01{\times}10^{-2}$) from the untouched model by $1.45\times$. The oracle is additionally separated by generation accuracy (80\% vs.\ 100\%) and by its much larger MIA (2.163 vs.\ 1.348); the claim here is narrower: among the checkpoints whose generation accuracy is saturated at 100\%, RII provides an ordering that accuracy cannot. We do not claim to separate NegGrad from NoUnlearn on RII alone: their full-set gap ($1.7{\times}10^{-3}$) falls inside the evaluation noise, and their subsampled means coincide ($0.127\pm0.002$ for both, below).
+All three unlearned checkpoints (and the untouched model) answer all forget questions (Forget$=$100\%; many TOFU answers are recoverable from the question itself), so generation accuracy cannot separate them. RII, by contrast, ranks FineTune below NoUnlearn ($9.73{\times}10^{-2}$ vs.\ $1.16{\times}10^{-1}$, $-16\%$), the same ordering as the vision benchmarks, and separates the (lightweight, 60-step) retraining oracle ($8.01{\times}10^{-2}$) from the untouched model by $1.45\times$. The oracle is additionally separated by generation accuracy (80\% vs.\ 100\%) and by its much larger MIA (2.163 vs.\ 1.348); the claim here is narrower: among the checkpoints whose generation accuracy is saturated at 100\%, RII provides an ordering that accuracy cannot. We do not claim to separate NegGrad from NoUnlearn on RII alone: their full-set gap ($1.7{\times}10^{-3}$) falls inside the evaluation noise, and their subsampled means coincide ($0.127\pm0.002$ for both, below).
 
 NegGrad's RII ($1.17{\times}10^{-1}$) is statistically indistinguishable from NoUnlearn's ($1.16{\times}10^{-1}$) under our evaluation protocol, unlike FineTune's 16\% decrease; its MIA (1.352) likewise matches NoUnlearn (1.348). Ascent thus produces no measurable output-space erasure here, and the strength sweep below shows the forget output signature \emph{strengthens} as ascent intensifies (rising to $1.20{\times}10^{-1}$ at $3\times$ strength before the model breaks down), the 7B analogue of the hidden failure documented on CIFAR-10/100 (Section~\ref{sec:benchmark}).
 
@@ -403,7 +403,7 @@ To gauge evaluation stability, we repeat the evaluation over three random subsam
 
 On the small Qwen2.5-0.5B pilot (Section~\ref{sec:benchmark}) vocabulary-level channels could not separate the oracle from the untouched model, because at 0.5B scale both answer sets induce statistically similar text distributions. At 7B scale the separation is significant ($1.45\times$, with no overlap of the three subsampled intervals): the larger model encodes author identity more strongly in next-token distributions, so even raw-vocabulary channels carry the class-level signal. Channel \emph{semantics} therefore determine discriminative power (class-level heads remain the recommended audit), and model capacity determines whether raw channels suffice (cf.\ Remark~\ref{rem:channel}).
 
-We also sweep the gradient-ascent strength (steps $\times$ learning rate), from the baseline $10\times 2{\times}10^{-5}$ to $30\times 10^{-4}$ ($3\times$ steps, $5\times$ lr) and $60\times 2{\times}10^{-4}$ ($6\times$ steps, $10\times$ lr), always starting from a fresh zero LoRA. At the moderate strength, RII \emph{rises} further to $1.20{\times}10^{-1}$ (above NoUnlearn's $1.16{\times}10^{-1}$) while forget/retain accuracy stay at 100\%: the hidden failure does not saturate: stronger ascent sharpens the forget output signature. At the strongest setting the model begins to break down: MIA jumps to 5.25 (from 1.35) and the ascent loss diverges to 6.5, while RII falls back to $1.01{\times}10^{-1}$, yet generation accuracy is still 100\%, so accuracy alone still cannot detect the collapse. RII decreases here \emph{because the output distribution degenerates into near-random noise}, which coincidentally makes the two sets look statistically similar again; the collapse is instead flagged by MIA. RII is therefore bidirectional: it rises as hidden-failure signatures strengthen and falls as the output distribution itself degenerates, so a low RII should be read alongside utility metrics (Retain accuracy, MIA) to distinguish true erasure from model collapse, in line with the two-axis audit of Section~\ref{sec:mia}.
+We also sweep the gradient-ascent strength (steps $\times$ learning rate), from the baseline $10\times 2{\times}10^{-5}$ to $30\times 10^{-4}$ ($3\times$ steps, $5\times$ lr) and $60\times 2{\times}10^{-4}$ ($6\times$ steps, $10\times$ lr), each time starting from a fresh zero LoRA. At the moderate strength, RII \emph{rises} further to $1.20{\times}10^{-1}$ (above NoUnlearn's $1.16{\times}10^{-1}$) while forget/retain accuracy stay at 100\%: the hidden failure does not saturate: stronger ascent sharpens the forget output signature. At the strongest setting the model begins to break down: MIA jumps to 5.25 (from 1.35) and the ascent loss diverges to 6.5, while RII falls back to $1.01{\times}10^{-1}$, yet generation accuracy is still 100\%, so accuracy alone still cannot detect the collapse. RII decreases here \emph{because the output distribution degenerates into near-random noise}, which coincidentally makes the two sets look statistically similar again; the collapse is instead flagged by MIA. RII is therefore bidirectional: it rises as hidden-failure signatures strengthen and falls as the output distribution itself degenerates, so a low RII should be read alongside utility metrics (Retain accuracy, MIA) to distinguish true erasure from model collapse, in line with the two-axis audit of Section~\ref{sec:mia}.
 
 \subsection{RII on MUSE-Style Long-Form Book Unlearning}
 \label{sec:muse}
@@ -494,7 +494,7 @@ Table~\ref{tab:cross} repeats the protocol on Fashion-MNIST with an MLP. RII rem
 \centering
 \small
 \caption{Cross-dataset benchmark with an identical protocol: RII/MHPR/MIA on CIFAR-10 (SmallCNN) and Fashion-MNIST (MLP); mean $\pm$ std over three seeds.}\label{tab:cross}
-\setlength{\tabcolsep}{2pt}
+\setlength{\tabcolsep}{0pt}
 \footnotesize
 \begin{tabular}{l c c c | c c c}
 \toprule
@@ -592,13 +592,7 @@ $K$ & $\rho_{\mathrm{std}}$ & $\rho_{\mathrm{LOCO}}$ & $\rho_H$ \\
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:mhpr} compares MHPR with LOCO. MHPR projects the forgotten class mean onto the span of $K$ held-out unseen classes (Sec.~\ref{sec:mhpr}); on MNIST class forgetting, $K\ge3$ resolves the LOCO failure: $K{=}1$ gives $\rho_H{=}0.942$ (worse than LOCO, as a single reference misses the unseen-class manifold), while $K{=}3$ drops $\rho_H$ to $0.046$, an order of magnitude below $\rho_{\mathrm{std}}{=}0.136$ and $\rho_{\mathrm{LOCO}}{=}0.310$. $K{=}4$ reaches $0.0008$ (near machine zero) but costs training data (accuracy $79.5\%{\to}48.7\%$). We recommend $K{=}3$. Figure~\ref{fig:k_ablation} shows the same trend graphically.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.78\textwidth]{figures/k_ablation.pdf}
-\caption{MHPR as a function of the number of held-out classes $K$ (MNIST class forgetting, forget class~5, log scale). $\rho_H$ drops by two orders of magnitude at $K{=}3$ and approaches machine zero at $K{=}4$, while the standard and LOCO RII baselines remain near $0.14$ and $0.31$ (Table~\ref{tab:mhpr}).}\label{fig:k_ablation}
-\end{figure}
+Table~\ref{tab:mhpr} compares MHPR with LOCO. MHPR projects the forgotten class mean onto the span of $K$ held-out unseen classes (Sec.~\ref{sec:mhpr}); on MNIST class forgetting, $K\ge3$ resolves the LOCO failure: $K{=}1$ gives $\rho_H{=}0.942$ (worse than LOCO, as a single reference misses the unseen-class manifold), while $K{=}3$ drops $\rho_H$ to $0.046$, an order of magnitude below $\rho_{\mathrm{std}}{=}0.136$ and $\rho_{\mathrm{LOCO}}{=}0.310$. $K{=}4$ reaches $0.0008$ (near machine zero) but costs training data (accuracy $79.5\%{\to}48.7\%$). We recommend $K{=}3$.
 
 Cross-dataset, adaptive temperature scaling extends MHPR to low-accuracy regimes in which the held-out subspace can collapse (a seed-dependent failure on Fashion-MNIST, Section~\ref{sec:benchmark}). On Fashion-MNIST ($88.7\%$ accuracy), $T{=}50$ reduces $\rho_H$ from $\sim1$ to $0.021$ in the collapsed run; on CIFAR-10 ($75\%$), $T{=}5$ gives $\rho_H{=}0.025$. These compare favorably to the class-level RII baselines ($0.166{\pm}0.004$ and $0.190{\pm}0.036$ for Fashion-MNIST and CIFAR-10, Table~\ref{tab:cross}).
 
@@ -703,7 +697,7 @@ In the random-forgetting baseline (Table~\ref{tab:main}), the train/test members
 \item \textbf{Sample-specific leakage (RII axis, $I_{\mathrm{cov}}$):} RII measures whether $P(Y\mid D_f,\theta') \neq P(Y\mid D_r,\theta')$, i.e., whether $D_f$ leaves a distinct output signature.
 \end{itemize}
 
-Retrain and NoUnlearn can exhibit near-identical RII while both show high MIA accuracy, because MIA detects training membership generally rather than whether a specific forget request has been honored. \textbf{RII certifies output-level forget/retain indistinguishability}, the relevant guarantee for erasure compliance.
+Retrain and NoUnlearn can exhibit near-identical RII while both show high MIA accuracy, because MIA detects training membership generally rather than forget-set-specific erasure. \textbf{RII certifies output-level forget/retain indistinguishability}, the relevant guarantee for compliance.
 
 \begin{table}[t]
 \centering
@@ -726,7 +720,7 @@ Table~\ref{tab:alpha} confirms the asymmetric response predicted by Theorem~\ref
 Output-layer guarantees are necessary but not sufficient for white-box security. Using the chain rule $I(D_f;Y,\theta') = I(D_f;\theta') + I(D_f;Y\mid\theta')$, the total leakage decomposes as $I(D_f;\theta') = I(D_f;Y) + I(D_f;\theta'\mid Y) - I(D_f;Y\mid\theta')$. RII certifies the conditional term $I(D_f;Y\mid\theta')$ (output leakage given the model). The term $I(D_f;\theta'\mid Y)$ (information in internal representations beyond the output) can be bounded by auditing internal features (e.g., MMD on penultimate activations). Together they form a complete two-layer certificate; full characterization is left to future work. Empirically (Section~\ref{sec:benchmark}), a residual probe on penultimate features separates forget from held-out samples with AUC ${\approx}0.96$ even for the retraining oracle, confirming that output-level certificates should be paired with representation-level audits.
 
 \paragraph{Comparison with existing metrics.}
-Among the metrics compared, RII and MHPR are the only ones that simultaneously satisfy spectral grounding, hyperparameter-free computation, and scale invariance. Unlike MIA (which conflates train/test shift with forget/retain leakage, $O(CN)$ but tuning-dependent), DP certification (invasive training), or backdoor-based audits (attack-dependent), RII directly quantifies whether the deleted data's influence has been removed from the model's output distribution (Table~\ref{tab:metric_compare}).
+Among the metrics compared, RII and MHPR are the only ones that are simultaneously spectral, tuning-free, and scale-invariant. Unlike MIA, DP certification, or backdoor audits, RII directly quantifies whether the deleted data's influence has been removed from the model's output distribution (Table~\ref{tab:metric_compare}).
 
 %=============================================================================
 \section{Related Work}
@@ -763,7 +757,7 @@ The unified decomposition separates leakage into $I_{\mathrm{cov}}\propto\eta^2$
 \label{sec:conclusion}
 %=============================================================================
 
-Class-level unlearning verification sits between two failure modes. Accuracy-based metrics saturate and lose their ordering power at high forgetting strength, whereas MIA measures general training membership rather than forget-set--specific output leakage. RII addresses this gap: it is a tuning-free, black-box certificate of output-level indistinguishability that remains informative precisely when accuracy saturates. Empirically, it tracks known forgetting strength across most settings and flags utility-driven collapses, and on TOFU with LLaMA-2-7B it retains that ordering among the checkpoints whose generation accuracy is saturated at 100\%. On MUSE-style long-form book unlearning (Section~\ref{sec:muse}), gradient ascent again leaves the forget output distribution unchanged, forget perplexity ranks retraining as the strongest erasure, and raw-vocabulary channels reflect the two books' inherent distinctness rather than the forgetting state---a crisp boundary case that underscores the role of channel semantics. The experiments also delimit what a spectral certificate can and cannot do. RII \emph{rises} under gradient ascent even as accuracy and MIA improve (a failure it exposes, and one that strengthens with class count), it rebounds after ascent-then-fine-tune, and it falls toward zero when a model degenerates, so it should be read together with utility metrics. On the theory side, $\rho=0$ is equivalent to output-channel independence, the fine-tuning bound is $O(\lambda^2)$, and the unified decomposition splits leakage into a direct (MIA) and a cover (RII) axis. The MHPR extension and its temperature scaling handle the known/unknown class asymmetry; a per-sample refinement (PSSD) is developed in Appendix~\ref{app:pssd}.
+Class-level unlearning verification sits between two failure modes. Accuracy-based metrics saturate and lose their ordering power at high forgetting strength, whereas MIA measures general training membership rather than forget-set--specific output leakage. RII addresses this gap: it is a tuning-free, black-box certificate of output-level indistinguishability that remains informative when accuracy saturates. Empirically, it tracks known forgetting strength across most settings and flags utility-driven collapses, and on TOFU with LLaMA-2-7B it retains that ordering among the checkpoints whose generation accuracy is saturated at 100\%. On MUSE-style long-form book unlearning (Section~\ref{sec:muse}), gradient ascent again leaves the forget output distribution unchanged, forget perplexity ranks retraining as the strongest erasure, and raw-vocabulary channels reflect the two books' inherent distinctness rather than the forgetting state---a crisp boundary case that underscores the role of channel semantics. The experiments also delimit what a spectral certificate can and cannot do. RII \emph{rises} under gradient ascent even as accuracy and MIA improve (a failure it exposes, and one that strengthens with class count), it rebounds after ascent-then-fine-tune, and it falls toward zero when a model degenerates, so it should be read together with utility metrics. On the theory side, $\rho=0$ is equivalent to output-channel independence, the fine-tuning bound is $O(\lambda^2)$, and the unified decomposition splits leakage into a direct (MIA) and a cover (RII) axis. The MHPR extension and its temperature scaling handle the known/unknown class asymmetry; a per-sample refinement (PSSD) is developed in Appendix~\ref{app:pssd}.
 
 \textbf{Limitations.} By construction, RII certifies output-level indistinguishability; it does not bound leakage in internal representations, which the probe experiments indicate can persist even for the retraining oracle, and it does not certify parameter-level privacy. The class-level benchmarks are over three seeds (reported as mean $\pm$ std); they support the metric's stability and the qualitative rankings, but with $n{=}3$ they do not by themselves establish statistical significance for close pairs. Seed stability is further corroborated by the random baseline (10 seeds) and the 7B study (3 subsamples). The AG News, 0.5B, and MUSE-style book results are single-run pilot observations reported as transfer evidence rather than full benchmarks (the book study is additionally limited by the base model's prior exposure to the public-domain texts, which compresses the teacher's learnable headroom). The MI bound requires $\pi_{\min}>0$, and the unified decomposition is exact under the Gaussian signal model, holding to leading order more generally.
 
@@ -1106,7 +1100,7 @@ As $T\to\infty$, $\mathbf{p}_T\to\mathbf{1}/C$ and $\rho_T\to0$; the convergence
 
 \subsection{Visual benchmarks}
 
-Table~\ref{tab:exp_vision} summarizes the visual-benchmark configuration; the class-level benchmarks are run over three seeds (0, 1, 2) and reported as mean $\pm$ std, with no data augmentation and plain per-channel normalization (CIFAR-10: mean $(0.4914,0.4822,0.4465)$, std $(0.2023,0.1994,0.2010)$; Fashion-MNIST/MNIST: mean $0.2860$, std $0.3530$).
+Table~\ref{tab:exp_vision} summarizes the visual-benchmark configuration; the class-level benchmarks are run over three seeds (0, 1, 2) and reported as mean $\pm$ std, with no data augmentation and plain per-channel normalization. The normalization constants are: CIFAR-10 mean $(0.4914,0.4822,0.4465)$ and std $(0.2023,0.1994,0.2010)$; Fashion-MNIST and MNIST mean $0.2860$ and std $0.3530$.
 
 \begin{table}[t]
 \centering
@@ -1139,19 +1133,19 @@ Table~\ref{tab:exp_llm} summarizes the LLM configuration. The TOFU~\cite{maini20
 \caption{Language-model configuration.}
 \label{tab:exp_llm}
 \setlength{\tabcolsep}{2pt}
-\begin{tabular}{@{}p{1.7cm} p{3.4cm} p{3.5cm} p{3.7cm}@{}}
+\begin{tabular}{@{}p{1.4cm} p{3.0cm} p{2.8cm} p{4.4cm}@{}}
 \toprule
 Experiment & Model & PEFT & Unlearning recipe \\
 \midrule
 TOFU 7B & LLaMA-2-7B (TOFU ckpt) & LoRA $r{=}8$, scale 20, 8/32 layers & NoUnlearn: ckpt as-is; FineTune: AdamW $10^{-5}$, 60 steps, batch 1; NegGrad: SGD $2{\times}10^{-5}$, 10 steps; Retrain: base + LoRA on retain, 60 steps \\
-MUSE 7B & LLaMA-2-7B (base) & LoRA $r{=}8$, scale 20, 8/32 layers & Teacher: 200 LoRA steps on forget book; NoUnlearn: teacher as-is; FineTune: AdamW $10^{-5}$, 60 steps; NegGrad: SGD $2{\times}10^{-5}$, 15 steps; Retrain: base + LoRA on retain, 60 steps \\
+MUSE 7B & LLaMA-2-7B (base) & LoRA $r{=}8$, scale 20, 8/32 layers & Teacher: 200 LoRA steps on forget book; FineTune: AdamW $10^{-5}$, 60 steps; NegGrad: SGD $2{\times}10^{-5}$, 15 steps; Retrain: base + LoRA on retain, 60 steps \\
 TOFU 0.5B & Qwen2.5-0.5B & full fine-tune & AdamW $5{\times}10^{-5}$; FineTune 40 steps, NegGrad 8 steps, batch 4 \\
 AG News & DistilBERT & full fine-tune & Adam $2{\times}10^{-5}$, 2 epochs, batch 32; 4000 train / 1500 eval per class; forget class = World news \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The NegGrad strength sweep (Section~\ref{sec:llm}) varies steps $\times$ learning rate from the baseline $(10, 2{\times}10^{-5})$ to $(30, 10^{-4})$ ($3\times$ steps, $5\times$ lr) and $(60, 2{\times}10^{-4})$ ($6\times$ steps, $10\times$ lr), always from a fresh zero LoRA.
+The NegGrad strength sweep settings are as described in Section~\ref{sec:llm}.
 
 \subsection{Membership inference attack details}
 \label{app:mia}

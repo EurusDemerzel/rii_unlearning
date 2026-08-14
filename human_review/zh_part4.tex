@@ -368,14 +368,14 @@ MNIST（过拟合） & DeepMLP & Adam & $10^{-3}$ & 64 & 50 \\
 实验 & 模型 & PEFT & 遗忘配方 \\
 \midrule
 TOFU 7B & LLaMA-2-7B（TOFU 检查点） & LoRA $r{=}8$，scale 20，8/32 层 & NoUnlearn：原检查点；FineTune：AdamW $10^{-5}$，60 步，batch 1；NegGrad：SGD $2{\times}10^{-5}$，10 步；Retrain：基座 + LoRA on retain，60 步 \\
-MUSE 7B & LLaMA-2-7B（基座） & LoRA $r{=}8$，scale 20，8/32 层 & Teacher：遗忘书籍上 200 步 LoRA；NoUnlearn：teacher 原样；FineTune：AdamW $10^{-5}$，60 步；NegGrad：SGD $2{\times}10^{-5}$，15 步；Retrain：基座 + LoRA on retain，60 步 \\
+MUSE 7B & LLaMA-2-7B（基座） & LoRA $r{=}8$，scale 20，8/32 层 & Teacher：遗忘书籍上 200 步 LoRA；FineTune：AdamW $10^{-5}$，60 步；NegGrad：SGD $2{\times}10^{-5}$，15 步；Retrain：基座 + LoRA on retain，60 步 \\
 TOFU 0.5B & Qwen2.5-0.5B & 全量微调 & AdamW $5{\times}10^{-5}$；FineTune 40 步，NegGrad 8 步，batch 4 \\
 AG News & DistilBERT & 全量微调 & Adam $2{\times}10^{-5}$，2 epoch，batch 32；每类 4000 训练 / 1500 评估；遗忘类 = World 新闻 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-NegGrad 强度扫描（第~\ref{sec:llm}~节）将步数 $\times$ 学习率从基线 $(10, 2{\times}10^{-5})$ 变化到 $(30, 10^{-4})$（$3\times$ 步数，$5\times$ lr）与 $(60, 2{\times}10^{-4})$（$6\times$ 步数，$10\times$ lr），始终从全新的零 LoRA 出发。
+NegGrad 强度扫描设置如第~\ref{sec:llm}~节所述。
 
 \subsection{成员推理攻击细节}
 \label{app:mia}

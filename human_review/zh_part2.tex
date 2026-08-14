@@ -40,7 +40,7 @@ Fashion-MNIST & NoUnlearn & 88.7 & $2.83\times10^{-4}$ & 90.4 \\
 \end{tabular}
 \end{table}
 
-表~\ref{tab:main} 揭示四点关键发现。第一，$\rho<5\times10^{-3}$ 一致成立：标准神经网络训练产生近秩一输出通道。第二，$\rho$ 与准确率无关：CIFAR-100 在 20\% 准确率下给出的 $\rho$ \emph{低于} MNIST 在 97.5\% 下的值，证实秩一性质是 softmax 输出单纯形固有的。第三，不同遗忘方法给出几乎相同的 $\rho$（我们在 MNIST 上验证了 Retrain、SISA 与 FineTune），这是预期的：对随机子集，模型的泛化使输出即使不做显式遗忘也不可区分。第四，在 10 个随机种子下，$\rho$ 的标准差 $<3.5\times10^{-4}$，支持可靠的单次审计。因此在随机遗忘下 RII 近乎平凡（所有方法不可区分），而类级遗忘正是 RII 与 MHPR 变得可判别的区间（第~\ref{sec:mhpr}~节与第~\ref{sec:benchmark}~节）。
+表~\ref{tab:main} 揭示四点关键发现。第一，$\rho<5\times10^{-3}$ 一致成立：标准神经网络训练产生近秩一输出通道。第二，$\rho$ 与准确率无关：CIFAR-100 在 20\% 准确率下给出的 $\rho$ \emph{低于} MNIST 在 97.5\% 下的值，证实秩一性质是 softmax 输出单纯形固有的。第三，不同遗忘方法给出几乎相同的 $\rho$（我们在 MNIST 上验证了 Retrain、SISA 与 FineTune），这是预期的：对随机子集，模型的泛化使输出即使不做显式遗忘也不可区分。第四，在 10 个随机种子下，$\rho$ 的标准差 $<3.5\times10^{-4}$，支持可靠的单次审计。因此在随机遗忘下 RII 近乎平凡（所有方法不可区分），而类级遗忘是 RII 与 MHPR 变得可判别的区间（第~\ref{sec:mhpr}~节与第~\ref{sec:benchmark}~节）。
 
 \subsection{70 亿参数语言模型上的 RII（TOFU）}
 \label{sec:llm}
@@ -75,7 +75,7 @@ NegGrad 的 RII（$1.17{\times}10^{-1}$）在我们的评估协议下与 NoUnlea
 
 在小模型 Qwen2.5-0.5B pilot（第~\ref{sec:benchmark}~节）上，词表级通道无法将 oracle 与未触动模型区分开，因为在 0.5B 规模下两个答案集诱导出统计上相似的文本分布。在 7B 规模下，区分显著（$1.45\times$，三次子采样区间无重叠）：更大模型在下一 token 分布中更强地编码作者身份，因此即使原始词表通道也携带类级信号。因此通道\emph{语义}决定判别力（类级头仍是推荐的审计对象），而模型容量决定原始通道是否足够（参见注记~\ref{rem:channel}）。
 
-我们还对梯度上升强度（步数 $\times$ 学习率）做扫描，从基线 $10\times 2{\times}10^{-5}$ 到 $30\times 10^{-4}$（$3\times$ 步数，$5\times$ lr）与 $60\times 2{\times}10^{-4}$（$6\times$ 步数，$10\times$ lr），始终从全新的零 LoRA 出发。在中等强度下，RII 进一步\emph{上升}到 $1.20{\times}10^{-1}$（高于 NoUnlearn 的 $1.16{\times}10^{-1}$），而遗忘/保留准确率保持在 100\%：隐藏失败并不饱和——更强的上升锐化遗忘输出签名。在最强设置下模型开始崩溃：MIA 跳到 5.25（从 1.35），上升损失发散到 6.5，而 RII 回落到 $1.01{\times}10^{-1}$，但生成准确率仍是 100\%，因此仅凭准确率仍无法检测崩溃。此处 RII 下降\emph{是因为输出分布退化为近随机噪声}，这巧合地使两个集合看起来又统计相似；崩溃反而由 MIA 标记。因此 RII 是双向的：它随隐藏失败签名增强而上升，随输出分布本身退化而下降，所以低 RII 必须与效用指标（保留准确率、MIA）一起解读，以区分真擦除与模型崩溃，这与第~\ref{sec:mia}~节的两轴审计一致。
+我们还对梯度上升强度（步数 $\times$ 学习率）做扫描，从基线 $10\times 2{\times}10^{-5}$ 到 $30\times 10^{-4}$（$3\times$ 步数，$5\times$ lr）与 $60\times 2{\times}10^{-4}$（$6\times$ 步数，$10\times$ lr），每次都从全新的零 LoRA 出发。在中等强度下，RII 进一步\emph{上升}到 $1.20{\times}10^{-1}$（高于 NoUnlearn 的 $1.16{\times}10^{-1}$），而遗忘/保留准确率保持在 100\%：隐藏失败并不饱和——更强的上升锐化遗忘输出签名。在最强设置下模型开始崩溃：MIA 跳到 5.25（从 1.35），上升损失发散到 6.5，而 RII 回落到 $1.01{\times}10^{-1}$，但生成准确率仍是 100\%，因此仅凭准确率仍无法检测崩溃。此处 RII 下降\emph{是因为输出分布退化为近随机噪声}，这巧合地使两个集合看起来又统计相似；崩溃反而由 MIA 标记。因此 RII 是双向的：它随隐藏失败签名增强而上升，随输出分布本身退化而下降，所以低 RII 必须与效用指标（保留准确率、MIA）一起解读，以区分真擦除与模型崩溃，这与第~\ref{sec:mia}~节的两轴审计一致。
 
 \subsection{MUSE 风格长文本书籍遗忘上的 RII}
 \label{sec:muse}
@@ -264,13 +264,7 @@ $K$ & $\rho_{\mathrm{std}}$ & $\rho_{\mathrm{LOCO}}$ & $\rho_H$ \\
 \end{tabular}
 \end{table}
 
-表~\ref{tab:mhpr} 比较 MHPR 与 LOCO。MHPR 将遗忘类均值投影到 $K$ 个留出未见类的张成子空间上（第~\ref{sec:mhpr}~节）；在 MNIST 类遗忘上，$K\ge3$ 解决 LOCO 失败：$K{=}1$ 给出 $\rho_H{=}0.942$（比 LOCO 更差，因为单个参照错失未见类流形），而 $K{=}3$ 将 $\rho_H$ 降到 $0.046$，比 $\rho_{\mathrm{std}}{=}0.136$ 与 $\rho_{\mathrm{LOCO}}{=}0.310$ 低一个数量级。$K{=}4$ 达到 $0.0008$（近机器零）但消耗训练数据（准确率 $79.5\%{\to}48.7\%$）。我们推荐 $K{=}3$。图~\ref{fig:k_ablation} 以图形方式展示相同趋势。
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.78\textwidth]{../ai_submission/figures/k_ablation.pdf}
-\caption{MHPR 随留出类数量 $K$ 的变化（MNIST 类遗忘，遗忘类~5，对数刻度）。$\rho_H$ 在 $K{=}3$ 时下降两个数量级，$K{=}4$ 时接近机器零，而标准与 LOCO RII 基线保持在 $0.14$ 与 $0.31$ 附近（表~\ref{tab:mhpr}）。}\label{fig:k_ablation}
-\end{figure}
+表~\ref{tab:mhpr} 比较 MHPR 与 LOCO。MHPR 将遗忘类均值投影到 $K$ 个留出未见类的张成子空间上（第~\ref{sec:mhpr}~节）；在 MNIST 类遗忘上，$K\ge3$ 解决 LOCO 失败：$K{=}1$ 给出 $\rho_H{=}0.942$（比 LOCO 更差，因为单个参照错失未见类流形），而 $K{=}3$ 将 $\rho_H$ 降到 $0.046$，比 $\rho_{\mathrm{std}}{=}0.136$ 与 $\rho_{\mathrm{LOCO}}{=}0.310$ 低一个数量级。$K{=}4$ 达到 $0.0008$（近机器零）但消耗训练数据（准确率 $79.5\%{\to}48.7\%$）。我们推荐 $K{=}3$。
 
 跨数据集的自适应温度缩放将 MHPR 扩展到留出子空间可能坍缩的低精度区间（Fashion-MNIST 上一种种子依赖的失败，第~\ref{sec:benchmark}~节）。在 Fashion-MNIST（$88.7\%$ 准确率）的坍缩运行上，$T{=}50$ 将 $\rho_H$ 从 $\sim1$ 降到 $0.021$；在 CIFAR-10（$75\%$）上，$T{=}5$ 给出 $\rho_H{=}0.025$。这些优于类级 RII 基线（Fashion-MNIST 与 CIFAR-10 分别为 $0.166{\pm}0.004$ 与 $0.190{\pm}0.036$，见表~\ref{tab:cross}）。
 

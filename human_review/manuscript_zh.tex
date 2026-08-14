@@ -137,7 +137,7 @@
 \section{类级遗忘与 MHPR}
 \label{sec:class_baselines}
 
-在类级遗忘中，遗忘行与保留行平均的是根本不同的分布：$\boldsymbol{\mu}_f$ 来自模型训练中从未见过的类。因此即使完美遗忘，两行也可能不同，从而抬高标准 RII。
+在类级遗忘中，遗忘行与保留行平均的是结构不同的分布：$\boldsymbol{\mu}_f$ 来自模型训练中从未见过的类。因此即使完美遗忘，两行也可能不同，从而抬高标准 RII。
 
 \subsection{单一留出类（LOCO）失效}
 
@@ -192,7 +192,7 @@ MHPR 使用 $K \ge 2$ 个留出未见类，并将遗忘类均值投影到它们�
 \subsection{假设与实践有效性}
 \label{sec:assumptions}
 
-表~\ref{tab:assumptions} 列出每个理论结果背后的假设及其在本文实验设定中的状态；随后我们讨论审稿人可能质疑的假设。
+表~\ref{tab:assumptions} 列出每个理论结果背后的假设及其在本文实验设定中的状态；随后我们考察其中最具影响的假设。
 
 \begin{table}[t]
 \centering

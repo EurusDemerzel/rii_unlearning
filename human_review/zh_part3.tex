@@ -13,7 +13,7 @@
 \item \textbf{样本特定泄漏（RII 轴，$I_{\mathrm{cov}}$）：}RII 度量 $P(Y\mid D_f,\theta') \neq P(Y\mid D_r,\theta')$ 是否成立，即 $D_f$ 是否留下不同的输出签名。
 \end{itemize}
 
-Retrain 与 NoUnlearn 可表现出几乎相同的 RII，同时两者 MIA 准确率都高，因为 MIA 检测的是训练成员性的一般性，而非某个具体遗忘请求是否被履行。\textbf{RII 证明输出级遗忘/保留不可区分性}——这正是擦除合规的相关保证。
+Retrain 与 NoUnlearn 可表现出几乎相同的 RII，同时两者 MIA 准确率都高，因为 MIA 检测的是训练成员性的一般性，而非遗忘集特定的擦除。\textbf{RII 证明输出级遗忘/保留不可区分性}——这正是合规的相关保证。
 
 \begin{table}[t]
 \centering
@@ -35,7 +35,7 @@ $\alpha$ & $\rho$ (RII) & MIA (\%) & 解释 \\
 输出层保证对白盒安全是必要而非充分的。利用链式法则 $I(D_f;Y,\theta') = I(D_f;\theta') + I(D_f;Y\mid\theta')$，总泄漏分解为 $I(D_f;\theta') = I(D_f;Y) + I(D_f;\theta'\mid Y) - I(D_f;Y\mid\theta')$。RII 证明条件项 $I(D_f;Y\mid\theta')$（给定模型的输出泄漏）。项 $I(D_f;\theta'\mid Y)$（输出之外的内部表示中的信息）可以通过审计内部特征（例如倒数第二层激活上的 MMD）来界定。两者共同构成完整的两层证书；完整刻画留待未来工作。经验上（第~\ref{sec:benchmark}~节），倒数第二层特征上的残差探针甚至对重训练 oracle 也能以 AUC ${\approx}0.96$ 分离遗忘与留出样本，证实输出级证书必须与表示级审计配对。
 
 \paragraph{与现有指标对比。}
-在所比较的指标中，RII 与 MHPR 是唯一同时满足谱奠基、免超参计算与尺度不变性的。与 MIA（混淆训练/测试位移与遗忘/保留泄漏，$O(CN)$ 但依赖调参）、DP 认证（侵入式训练）、或基于后门的审计（依赖攻击）不同，RII 直接量化被删数据的影响是否已从模型的输出分布中移除（表~\ref{tab:metric_compare}）。
+在所比较的指标中，RII 与 MHPR 是唯一同时具备谱基础、免调参与尺度不变性的。与 MIA、DP 认证或后门审计不同，RII 直接量化被删数据的影响是否已从模型的输出分布中移除（表~\ref{tab:metric_compare}）。
 
 % =============================================================================
 \section{相关工作}
